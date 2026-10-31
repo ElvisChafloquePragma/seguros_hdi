@@ -1,0 +1,36 @@
+# ==============================================================================
+# Registro Auditable de Excepciones de Seguridad (Cumplimiento SFC CE 007/2018)
+# Cualquier hallazgo HIGH sin parche disponible que requiera pase temporal debe
+# registrarse aqui mediante Pull Request con aprobador y fecha de expiracion.
+# ==============================================================================
+version: "1.0"
+policy:
+  block_on:
+    - SECRETS_DETECTED
+    - CRITICAL
+    - HIGH_WITH_FIX
+  warn_on:
+    - MEDIUM
+    - LOW
+  sla_days:
+    CRITICAL: 7
+    HIGH: 15
+    MEDIUM: 30
+    LOW: 90
+
+exceptions:
+  - id: CKV_AWS_116
+    tool: checkov
+    severity: LOW
+    resource: "AWS::Serverless::Function"
+    justification: "Las funciones son invocadas sincronicamente por API Gateway REST; los reintentos y errores se controlan con alarmas CloudWatch y rollback de CodeDeploy."
+    approved_by: "Arquitectura de Seguridad / Oficial de Cumplimiento SFC"
+    expires_on: "2027-06-30"
+  - id: CKV_AWS_117
+    tool: checkov
+    severity: LOW
+    resource: "AWS::Serverless::Function"
+    justification: "Arquitectura 100% Serverless (DynamoDB, S3 y Secrets Manager accedidos mediante IAM SigV4 y endpoints TLS sin bases de datos RDS en VPC privada)."
+    approved_by: "Arquitectura de Seguridad / Oficial de Cumplimiento SFC"
+    expires_on: "2027-06-30"
+

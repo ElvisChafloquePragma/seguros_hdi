@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SiniestrosEnvironmentParameters",
+  "description": "Esquema de validacion estricta para parametros de ambientes (dev, staging, prod). Evita configuraciones inconsistentes manuales (Problema #5).",
+  "type": "object",
+  "required": [
+    "Env",
+    "NodeRuntime",
+    "LambdaMemorySize",
+    "LambdaTimeout",
+    "DeploymentPreferenceType",
+    "EnableWaf",
+    "LogRetentionDays"
+  ],
+  "properties": {
+    "Env": {
+      "type": "string",
+      "enum": ["dev", "staging", "prod"]
+    },
+    "NodeRuntime": {
+      "type": "string",
+      "enum": ["nodejs22.x", "nodejs24.x"]
+    },
+    "LambdaMemorySize": {
+      "type": "integer",
+      "minimum": 128,
+      "maximum": 3008
+    },
+    "LambdaTimeout": {
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 120
+    },
+    "DeploymentPreferenceType": {
+      "type": "string",
+      "enum": [
+        "AllAtOnce",
+        "Linear10PercentEvery1Minute",
+        "Canary10Percent5Minutes",
+        "Canary10Percent10Minutes"
+      ]
+    },
+    "EnableWaf": {
+      "type": "string",
+      "enum": ["true", "false"]
+    },
+    "LogRetentionDays": {
+      "type": "integer",
+      "enum": [7, 14, 30, 90, 180, 365]
+    }
+  },
+  "additionalProperties": false
+}
+

@@ -1,0 +1,10 @@
+{
+  "Env": "dev",
+  "NodeRuntime": "nodejs22.x",
+  "LambdaMemorySize": 256,
+  "LambdaTimeout": 15,
+  "DeploymentPreferenceType": "AllAtOnce",
+  "EnableWaf": "false",
+  "LogRetentionDays": 14
+}
+

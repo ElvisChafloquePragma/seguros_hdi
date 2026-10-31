@@ -1,0 +1,10 @@
+{
+  "Env": "staging",
+  "NodeRuntime": "nodejs22.x",
+  "LambdaMemorySize": 256,
+  "LambdaTimeout": 20,
+  "DeploymentPreferenceType": "Linear10PercentEvery1Minute",
+  "EnableWaf": "false",
+  "LogRetentionDays": 30
+}
+

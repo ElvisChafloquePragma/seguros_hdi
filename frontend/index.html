@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aseguradora Colombiana S.A. | Registro de Siniestros (SFC)</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f1f5f9; color: #1e293b; }
+    .container { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+    header { background: #0f172a; color: #fff; padding: 18px 22px; border-radius: 8px; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { background: #fff; padding: 18px; border-radius: 8px; border: 1px solid #cbd5e1; }
+    label { display: block; font-size: 12px; font-weight: 600; margin-top: 8px; }
+    input, select, textarea { width: 100%; padding: 7px; margin-top: 4px; box-sizing: border-box; border: 1px solid #94a3b8; border-radius: 4px; }
+    button { margin-top: 12px; padding: 9px 14px; border: 0; border-radius: 6px; color: #fff; font-weight: 600; cursor: pointer; }
+    .btn-blue { background: #2563eb; }
+    .btn-dark { background: #0f172a; }
+    .btn-amber { background: #d97706; }
+    .btn-green { background: #059669; }
+    pre { background: #0f172a; color: #38bdf8; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h2 style="margin:0;">Aseguradora Colombiana S.A. — Portal de Siniestros en Terreno</h2>
+      <small style="color:#94a3b8;">CloudFront + WAF + S3 SPA + API Gateway + Cognito + Lambda Node.js 22 (arm64) + DynamoDB + KMS (SFC)</small>
+    </header>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <label>URL Base del API Gateway / CloudFront (Por defecto usa el mismo origen /api/v1):</label>
+      <input id="apiBase" value="/api/v1" />
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3 style="margin-top:0;">1. Registrar Siniestro (POST /claims)</h3>
+        <label>Número de Póliza <input id="policyNumber" value="POL-789012" /></label>
+        <label>Placa del Vehículo <input id="vehiclePlate" value="ABC123" /></label>
+        <label>Cédula Asegurado (PII) <input id="insuredId" value="1020304050" /></label>
+        <label>Nombre Asegurado (PII) <input id="insuredName" value="Carlos Andres Perez" /></label>
+        <label>Ciudad <input id="city" value="Bogotá" /></label>
+        <label>Monto Estimado (COP) <input id="estimatedAmountCop" type="number" value="3500000" /></label>
+        <label>Descripción del Incidente <textarea id="description" rows="2">Colisión simple en intersección.</textarea></label>
+        <button class="btn-blue" onclick="createClaim()">Registrar Siniestro</button>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0;">2. Consultar, Actualizar y Generar PDF</h3>
+        <label>ID del Siniestro (claimId) <input id="claimId" placeholder="CLM-..." /></label>
+        <button class="btn-dark" onclick="getClaim()">Consultar (GET)</button>
+        <button class="btn-green" onclick="generatePdf()">Generar Reporte PDF (POST /documents/report)</button>
+        <hr style="margin:14px 0; border:0; border-top:1px solid #e2e8f0;" />
+        <label>Actualizar Estado (PATCH)
+          <select id="status">
+            <option value="IN_REVIEW">IN_REVIEW</option>
+            <option value="APPROVED">APPROVED</option>
+            <option value="REJECTED">REJECTED</option>
+            <option value="CLOSED">CLOSED</option>
+          </select>
+        </label>
+        <label>Notas del Ajustador <input id="adjusterNotes" value="Inspección verificada en terreno" /></label>
+        <button class="btn-amber" onclick="updateClaim()">Actualizar Siniestro (PATCH)</button>
+        <div id="pdfLink" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <h4>Respuesta de la API:</h4>
+    <pre id="output">Listo para enviar peticiones...</pre>
+  </div>
+
+  <script>
+    const out = (data) => document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+    const api = () => document.getElementById('apiBase').value.replace(/\/$/, '');
+
+    async function createClaim() {
+      const res = await fetch(`${api()}/claims`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          policyNumber: document.getElementById('policyNumber').value,
+          vehiclePlate: document.getElementById('vehiclePlate').value,
+          insuredId: document.getElementById('insuredId').value,
+          insuredName: document.getElementById('insuredName').value,
+          city: document.getElementById('city').value,
+          estimatedAmountCop: Number(document.getElementById('estimatedAmountCop').value),
+          description: document.getElementById('description').value
+        })
+      });
+      const json = await res.json();
+      out(json);
+      if (json.data?.claimId) document.getElementById('claimId').value = json.data.claimId;
+    }
+
+    async function getClaim() {
+      const id = document.getElementById('claimId').value;
+      const res = await fetch(`${api()}/claims/${encodeURIComponent(id)}`);
+      out(await res.json());
+    }
+
+    async function updateClaim() {
+      const id = document.getElementById('claimId').value;
+      const res = await fetch(`${api()}/claims/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: document.getElementById('status').value,
+          adjusterNotes: document.getElementById('adjusterNotes').value
+        })
+      });
+      out(await res.json());
+    }
+
+    async function generatePdf() {
+      const id = document.getElementById('claimId').value;
+      const res = await fetch(`${api()}/documents/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claimId: id })
+      });
+      const json = await res.json();
+      out(json);
+      if (json.data?.downloadUrl) {
+        document.getElementById('pdfLink').innerHTML =
+          `<a href="${json.data.downloadUrl}" target="_blank" style="color:#059669;font-weight:bold;">Descargar PDF Oficial (URL Prefirmada S3 - 5 min)</a>`;
+      }
+    }
+  </script>
+</body>
+</html>

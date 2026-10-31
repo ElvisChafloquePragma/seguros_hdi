@@ -1,0 +1,10 @@
+{
+  "Env": "prod",
+  "NodeRuntime": "nodejs22.x",
+  "LambdaMemorySize": 512,
+  "LambdaTimeout": 25,
+  "DeploymentPreferenceType": "Canary10Percent5Minutes",
+  "EnableWaf": "true",
+  "LogRetentionDays": 365
+}
+

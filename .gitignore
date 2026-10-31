@@ -1,0 +1,33 @@
+# Node / JS
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+
+# AWS SAM / CloudFormation
+.aws-sam/
+packaged.yaml
+packaged-*.yaml
+samconfig.local.toml
+
+# Security & Test Reports
+reports/
+*.sarif
+reports/*.html
+sbom.json
+security-summary.md
+ai-failure-analysis.md
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.log
+
+# Jenkins local state
+ci/jenkins/jenkins_home/
+
