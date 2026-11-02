@@ -61,6 +61,9 @@ pipeline {
                     }
 
                     echo "[CI/CD] Rama detectada='${currentBranch}' -> Ambiente efectivo='${env.EFFECTIVE_ENV}' | Commit=${env.GIT_COMMIT_SHORT}"
+
+                    // Plus CI/CD: Descripcion ejecutiva dinamica en la interfaz web de Jenkins
+                    currentBuild.description = "Commit: ${env.GIT_COMMIT_SHORT} | Rama: ${currentBranch} | Env: ${env.EFFECTIVE_ENV}"
                 }
                 sh 'mkdir -p reports'
             }
@@ -197,6 +200,7 @@ pipeline {
                         )
                     }
                     echo "[SFC Audit] Despliegue a PROD aprobado por: ${env.APPROVER_USER ?: 'ReleaseManager'}"
+                    currentBuild.description = "${currentBuild.description} | Aprobador: ${env.APPROVER_USER ?: 'ReleaseManager'}"
                 }
             }
         }
@@ -222,7 +226,15 @@ pipeline {
     }
 
     post {
+        success {
+            script {
+                currentBuild.description = "${currentBuild.description} | Estado: EXITOSO"
+            }
+        }
         failure {
+            script {
+                currentBuild.description = "${currentBuild.description} | Estado: FALLIDO (Causa Analizada por Bedrock)"
+            }
             echo '[AI Case #1] Analizando causa raiz del fallo con Amazon Bedrock y registrando CFR en DORA...'
             sh '''
                 bash scripts/ai-devops-assistant.sh failure reports/combined-security.txt reports/ai-failure-analysis.md || true
