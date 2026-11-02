@@ -35,3 +35,4 @@ echo "=================================================================="
 echo " [OK] Instalacion completada exitosamente en ${CONTAINER_NAME}."
 echo " Ya puedes ir a Jenkins y hacer clic en el boton verde de Play!"
 echo "=================================================================="
+
