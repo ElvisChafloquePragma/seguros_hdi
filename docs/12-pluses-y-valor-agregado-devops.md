@@ -49,3 +49,4 @@ Y el séptimo plus es la integración de Inteligencia Artificial con **Amazon Be
 - **Plus 5 (Security Exceptions):** Archivo completo [`.security-exceptions.yaml`](file:///mnt/c/Users/elvis.chafloque_prag/Documents/Prueba_tecnica/.security-exceptions.yaml).
 - **Plus 6 (DORA Lead Time Real):** Líneas 20-35 de [`scripts/dora-metrics.sh`](file:///mnt/c/Users/elvis.chafloque_prag/Documents/Prueba_tecnica/scripts/dora-metrics.sh).
 - **Plus 7 (Bedrock AI Dual):** Funciones `triage_security()` y `analyze_failure()` en [`scripts/ai-devops-assistant.sh`](file:///mnt/c/Users/elvis.chafloque_prag/Documents/Prueba_tecnica/scripts/ai-devops-assistant.sh).
+
