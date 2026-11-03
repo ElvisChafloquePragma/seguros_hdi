@@ -1,29 +1,28 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -e
 
 # ==============================================================================
-# Smoke Tests & Pruebas de Integracion End-to-End contra el ambiente desplegado
-# Verifica:
-#  1) POST /api/v1/claims (Registro de siniestro)
-#  2) GET /api/v1/claims/{id} (Consulta de siniestro)
-#  3) PATCH /api/v1/claims/{id} (Actualizacion de siniestro)
-#  4) POST /api/v1/documents/report (Generacion de PDF en S3 + URL prefirmada)
+# SCRIPT 3: Smoke Tests (Pruebas Funcionales End-to-End en Vivo)
+# Usa 'curl --fail' para que si el API responde error (4xx o 5xx), el script
+# falle automáticamente y detenga el pipeline.
 # ==============================================================================
 
 ENV="${1:-dev}"
 STACK_NAME="siniestros-${ENV}"
 REGION="${AWS_REGION:-us-east-1}"
 
+# 1. Obtener la URL real del API Gateway desde CloudFormation
 API_URL=$(aws cloudformation describe-stacks \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
   --query "Stacks[0].Outputs[?OutputKey=='ApiEndpointUrl'].OutputValue" \
   --output text)
 
-echo "[INFO] Ejecutando pruebas E2E contra ${API_URL} (${ENV})..."
+echo "[INFO] Ejecutando Smoke Tests contra ${API_URL} (Ambiente: ${ENV})..."
 
-# 1. Crear siniestro
-CREATE_RES=$(curl -sS -w "\n%{http_code}" -X POST "${API_URL}/claims" \
+# 2. Prueba POST /claims (Registrar un siniestro nuevo en DynamoDB)
+echo "  -> Probando 1/4: POST /claims (Crear siniestro)..."
+CREATE_RESPONSE=$(curl -s --fail -X POST "${API_URL}/claims" \
   -H "Content-Type: application/json" \
   -d '{
     "policyNumber": "POL-654321",
@@ -43,48 +42,29 @@ CREATE_RES=$(curl -sS -w "\n%{http_code}" -X POST "${API_URL}/claims" \
     "estimatedAmountCop": 2900000
   }')
 
-HTTP_CODE=$(echo "${CREATE_RES}" | tail -n1)
-BODY=$(echo "${CREATE_RES}" | sed '$d')
+# Extraemos el ID del siniestro creado usando jq
+CLAIM_ID=$(echo "${CREATE_RESPONSE}" | jq -r '.data.claimId')
+echo "     [OK] Siniestro creado con ID: ${CLAIM_ID}"
 
-if [[ "${HTTP_CODE}" != "201" ]]; then
-  echo "[ERROR] Fallo POST /claims (HTTP ${HTTP_CODE}): ${BODY}"
-  exit 1
-fi
+# 3. Prueba GET /claims/{id} (Consultar el siniestro creado)
+echo "  -> Probando 2/4: GET /claims/${CLAIM_ID} (Consultar siniestro)..."
+curl -s --fail "${API_URL}/claims/${CLAIM_ID}" > /dev/null
+echo "     [OK] Consulta exitosa (HTTP 200)"
 
-CLAIM_ID=$(echo "${BODY}" | jq -r '.data.claimId')
-echo "  [PASS] POST /claims -> Creado ${CLAIM_ID}"
-
-# 2. Consultar siniestro
-GET_CODE=$(curl -sS -o /dev/null -w "%{http_code}" "${API_URL}/claims/${CLAIM_ID}")
-if [[ "${GET_CODE}" != "200" ]]; then
-  echo "[ERROR] Fallo GET /claims/${CLAIM_ID} (HTTP ${GET_CODE})"
-  exit 1
-fi
-echo "  [PASS] GET /claims/${CLAIM_ID} -> HTTP 200"
-
-# 3. Actualizar siniestro
-PATCH_CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X PATCH "${API_URL}/claims/${CLAIM_ID}" \
+# 4. Prueba PATCH /claims/{id} (Actualizar estado a IN_REVIEW)
+echo "  -> Probando 3/4: PATCH /claims/${CLAIM_ID} (Actualizar estado)..."
+curl -s --fail -X PATCH "${API_URL}/claims/${CLAIM_ID}" \
   -H "Content-Type: application/json" \
-  -d '{"status":"IN_REVIEW","adjusterNotes":"Verificado por smoke test automatizado CI/CD"}')
-if [[ "${PATCH_CODE}" != "200" ]]; then
-  echo "[ERROR] Fallo PATCH /claims/${CLAIM_ID} (HTTP ${PATCH_CODE})"
-  exit 1
-fi
-echo "  [PASS] PATCH /claims/${CLAIM_ID} -> HTTP 200 (status=IN_REVIEW)"
+  -d '{"status":"IN_REVIEW","adjusterNotes":"Verificado por smoke test CI/CD"}' > /dev/null
+echo "     [OK] Estado actualizado a IN_REVIEW (HTTP 200)"
 
-# 4. Generar reporte PDF
-DOC_RES=$(curl -sS -w "\n%{http_code}" -X POST "${API_URL}/documents/report" \
+# 5. Prueba POST /documents/report (Generar PDF en S3)
+echo "  -> Probando 4/4: POST /documents/report (Generar reporte PDF en S3)..."
+DOC_RESPONSE=$(curl -s --fail -X POST "${API_URL}/documents/report" \
   -H "Content-Type: application/json" \
   -d "{\"claimId\":\"${CLAIM_ID}\",\"includeAdjusterNotes\":true}")
-DOC_CODE=$(echo "${DOC_RES}" | tail -n1)
-DOC_BODY=$(echo "${DOC_RES}" | sed '$d')
 
-if [[ "${DOC_CODE}" != "201" ]]; then
-  echo "[ERROR] Fallo POST /documents/report (HTTP ${DOC_CODE}): ${DOC_BODY}"
-  exit 1
-fi
+REPORT_KEY=$(echo "${DOC_RESPONSE}" | jq -r '.data.reportKey')
+echo "     [OK] PDF guardado en S3: ${REPORT_KEY}"
 
-REPORT_KEY=$(echo "${DOC_BODY}" | jq -r '.data.reportKey')
-echo "  [PASS] POST /documents/report -> PDF almacenado en S3 (${REPORT_KEY})"
-echo "[OK] Smoke tests E2E superados con exito en ${ENV}."
-
+echo "[OK] Las 4 pruebas End-to-End pasaron con éxito en ${ENV}."

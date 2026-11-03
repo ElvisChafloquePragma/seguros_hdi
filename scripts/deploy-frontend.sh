@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -e
 
 # ==============================================================================
-# Estrategia de Despliegue del Frontend SPA (S3 + Invalidacion CloudFront)
-# 1) Sincroniza assets con hash inmutable (Cache-Control: 1 año, immutable).
-# 2) Sincroniza index.html con Cache-Control: no-cache, no-store, must-revalidate.
-# 3) Ejecuta invalidacion en CloudFront sobre /index.html (1,000 rutas/mes gratis).
+# SCRIPT 2: Despliegue de Frontend React (S3 + Invalidación CloudFront)
+# 1. Consulta en CloudFormation el nombre del Bucket S3 y el ID de CloudFront.
+# 2. Sube los archivos .js y .css con caché de 1 año (inmutables).
+# 3. Sube index.html sin caché para que el usuario siempre vea la última versión.
+# 4. Invalida /index.html en CloudFront.
 # ==============================================================================
 
 ENV="${1:-dev}"
 STACK_NAME="siniestros-${ENV}"
 REGION="${AWS_REGION:-us-east-1}"
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DIST_DIR="${ROOT_DIR}/frontend/dist"
 
-echo "[INFO] Obteniendo Outputs del stack ${STACK_NAME}..."
+echo "[INFO] 1. Consultando datos del stack ${STACK_NAME} en CloudFormation..."
+
 FRONTEND_BUCKET=$(aws cloudformation describe-stacks \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
@@ -33,25 +33,22 @@ CF_URL=$(aws cloudformation describe-stacks \
   --query "Stacks[0].Outputs[?OutputKey=='CloudFrontUrl'].OutputValue" \
   --output text)
 
-echo "[INFO] Sincronizando assets estaticos versionados hacia s3://${FRONTEND_BUCKET}..."
-aws s3 sync "${DIST_DIR}/" "s3://${FRONTEND_BUCKET}/" \
+echo "[INFO] 2. Subiendo archivos estáticos (.js, .css) con caché de 1 año..."
+aws s3 sync "frontend/dist/" "s3://${FRONTEND_BUCKET}/" \
   --exclude "index.html" \
   --cache-control "public, max-age=31536000, immutable" \
   --delete \
   --region "${REGION}"
 
-echo "[INFO] Subiendo index.html con politica no-cache..."
-aws s3 cp "${DIST_DIR}/index.html" "s3://${FRONTEND_BUCKET}/index.html" \
+echo "[INFO] 3. Subiendo index.html sin caché (no-cache)..."
+aws s3 cp "frontend/dist/index.html" "s3://${FRONTEND_BUCKET}/index.html" \
   --cache-control "no-cache, no-store, must-revalidate" \
   --content-type "text/html; charset=utf-8" \
   --region "${REGION}"
 
-echo "[INFO] Creando invalidacion en CloudFront (${CF_DIST_ID})..."
-INVALIDATION_ID=$(aws cloudfront create-invalidation \
+echo "[INFO] 4. Limpiando caché (Invalidación) en CloudFront (${CF_DIST_ID})..."
+aws cloudfront create-invalidation \
   --distribution-id "${CF_DIST_ID}" \
-  --paths "/index.html" "/" \
-  --query "Invalidation.Id" \
-  --output text)
+  --paths "/index.html" "/" > /dev/null
 
-echo "[OK] Frontend desplegado en ${CF_URL} (Invalidation ID: ${INVALIDATION_ID})"
-
+echo "[OK] Frontend publicado exitosamente en: ${CF_URL}"
