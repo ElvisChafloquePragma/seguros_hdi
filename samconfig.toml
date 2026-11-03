@@ -1,0 +1,31 @@
+version = 0.1
+
+[dev.deploy.parameters]
+stack_name = "siniestros-dev"
+region = "us-east-1"
+resolve_s3 = true
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+confirm_changeset = false
+fail_on_empty_changeset = false
+parameter_overrides = "Env=dev ProjectName=siniestros NodeRuntime=nodejs22.x LambdaMemorySize=256 LambdaTimeout=15 DeploymentPreferenceType=AllAtOnce EnableWaf=false LogRetentionDays=14"
+tags = "Project=siniestros Environment=dev DataClassification=PII-Confidential Compliance=SFC-CE007-2018"
+
+[staging.deploy.parameters]
+stack_name = "siniestros-staging"
+region = "us-east-1"
+resolve_s3 = true
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+confirm_changeset = false
+fail_on_empty_changeset = false
+parameter_overrides = "Env=staging ProjectName=siniestros NodeRuntime=nodejs22.x LambdaMemorySize=256 LambdaTimeout=20 DeploymentPreferenceType=Linear10PercentEvery1Minute EnableWaf=false LogRetentionDays=30"
+tags = "Project=siniestros Environment=staging DataClassification=PII-Confidential Compliance=SFC-CE007-2018"
+
+[prod.deploy.parameters]
+stack_name = "siniestros-prod"
+region = "us-east-1"
+resolve_s3 = true
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+confirm_changeset = false
+fail_on_empty_changeset = false
+parameter_overrides = "Env=prod ProjectName=siniestros NodeRuntime=nodejs22.x LambdaMemorySize=512 LambdaTimeout=25 DeploymentPreferenceType=Canary10Percent5Minutes EnableWaf=true LogRetentionDays=365"
+tags = "Project=siniestros Environment=prod DataClassification=PII-Confidential Compliance=SFC-CE007-2018"

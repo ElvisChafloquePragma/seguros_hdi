@@ -170,7 +170,7 @@ pipeline {
                 sh '''
                     sam deploy \
                       --template-file infra/template.yaml \
-                      --config-file infra/samconfig.toml \
+                      --config-file "${PWD}/infra/samconfig.toml" \
                       --config-env dev \
                       --region "${AWS_REGION}"
 
@@ -189,7 +189,7 @@ pipeline {
                 sh '''
                     sam deploy \
                       --template-file infra/template.yaml \
-                      --config-file infra/samconfig.toml \
+                      --config-file "${PWD}/infra/samconfig.toml" \
                       --config-env staging \
                       --region "${AWS_REGION}"
 
@@ -229,7 +229,7 @@ pipeline {
                 sh '''
                     sam deploy \
                       --template-file infra/template.yaml \
-                      --config-file infra/samconfig.toml \
+                      --config-file "${PWD}/infra/samconfig.toml" \
                       --config-env prod \
                       --region "${AWS_REGION}"
 
