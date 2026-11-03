@@ -1,10 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Aplicacion Serverless de Registro de Siniestros Vehiculares (HDI / Aseguradora Colombiana - Regulada SFC).
-  Arquitectura Serverless: CloudFront (+SecurityHeaders +WAF) -> S3 Frontend SPA & API Gateway REST (+Cognito +AccessLogs) ->
-  Lambdas Node.js 22.x arm64 con CodeDeploy Canary + Rollback Automatico -> DynamoDB On-Demand + S3 Reports (Lifecycle SFC) +
-  Secrets Manager + KMS CMK + CloudWatch DORA Dashboard y SNS.
+  Aplicacion Serverless de Registro de Siniestros Vehiculares
 
 Parameters:
   Env:
