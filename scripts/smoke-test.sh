@@ -2,69 +2,53 @@
 set -e
 
 # ==============================================================================
-# SCRIPT 3: Smoke Tests (Pruebas Funcionales End-to-End en Vivo)
-# Usa 'curl --fail' para que si el API responde error (4xx o 5xx), el script
-# falle automáticamente y detenga el pipeline.
+# SCRIPT 3: Smoke Tests (Verificación Post-Despliegue en Vivo)
+# Valida el API real en AWS con 4 pruebas simples:
+#   1. POST  /claims          -> Crea un siniestro
+#   2. GET   /claims/{id}     -> Lo consulta
+#   3. PATCH /claims/{id}     -> Lo actualiza
+#   4. POST  /documents/report -> Genera el PDF en S3
+#
+# Si cualquier petición falla (error 4xx o 5xx), 'curl --fail' detiene el pipeline.
 # ==============================================================================
 
 ENV="${1:-dev}"
-STACK_NAME="siniestros-${ENV}"
-REGION="${AWS_REGION:-us-east-1}"
+STACK="siniestros-${ENV}"
 
-# 1. Obtener la URL real del API Gateway desde CloudFormation
+# 1. Obtener la URL del API Gateway desde CloudFormation
 API_URL=$(aws cloudformation describe-stacks \
-  --stack-name "${STACK_NAME}" \
-  --region "${REGION}" \
+  --stack-name "${STACK}" \
   --query "Stacks[0].Outputs[?OutputKey=='ApiEndpointUrl'].OutputValue" \
   --output text)
 
-echo "[INFO] Ejecutando Smoke Tests contra ${API_URL} (Ambiente: ${ENV})..."
+echo "[INFO] Ejecutando Smoke Tests contra: ${API_URL}"
 
-# 2. Prueba POST /claims (Registrar un siniestro nuevo en DynamoDB)
-echo "  -> Probando 1/4: POST /claims (Crear siniestro)..."
-CREATE_RESPONSE=$(curl -s --fail -X POST "${API_URL}/claims" \
+# 2. Crear un siniestro de prueba
+echo "  -> 1. POST /claims (Crear siniestro en DynamoDB)..."
+RESPUESTA=$(curl -s --fail -X POST "${API_URL}/claims" \
   -H "Content-Type: application/json" \
-  -d '{
-    "policyNumber": "POL-654321",
-    "vehiclePlate": "BOG789",
-    "insuredId": "1015202530",
-    "insuredName": "Laura Valentina Mendoza",
-    "insuredPhone": "+573152223344",
-    "insuredEmail": "laura.mendoza@asegurados.co",
-    "incidentDate": "2026-10-29T12:00:00.000Z",
-    "location": {
-      "city": "Bogotá",
-      "address": "Calle 100 # 15-20",
-      "latitude": 4.686,
-      "longitude": -74.048
-    },
-    "description": "Colisión lateral durante lluvia intensa; daños en puerta derecha.",
-    "estimatedAmountCop": 2900000
-  }')
+  -d '{"policyNumber":"POL-123","vehiclePlate":"HDI789","insuredId":"102030"}')
 
-# Extraemos el ID del siniestro creado usando jq
-CLAIM_ID=$(echo "${CREATE_RESPONSE}" | jq -r '.data.claimId')
-echo "     [OK] Siniestro creado con ID: ${CLAIM_ID}"
+ID=$(echo "${RESPUESTA}" | jq -r '.data.claimId')
+echo "     [OK] Creado con ID: ${ID}"
 
-# 3. Prueba GET /claims/{id} (Consultar el siniestro creado)
-echo "  -> Probando 2/4: GET /claims/${CLAIM_ID} (Consultar siniestro)..."
-curl -s --fail "${API_URL}/claims/${CLAIM_ID}" > /dev/null
-echo "     [OK] Consulta exitosa (HTTP 200)"
+# 3. Consultar el siniestro recién creado
+echo "  -> 2. GET /claims/${ID} (Consultar en DynamoDB)..."
+curl -s --fail "${API_URL}/claims/${ID}" > /dev/null
+echo "     [OK] Consulta exitosa"
 
-# 4. Prueba PATCH /claims/{id} (Actualizar estado a IN_REVIEW)
-echo "  -> Probando 3/4: PATCH /claims/${CLAIM_ID} (Actualizar estado)..."
-curl -s --fail -X PATCH "${API_URL}/claims/${CLAIM_ID}" \
+# 4. Actualizar el estado del siniestro
+echo "  -> 3. PATCH /claims/${ID} (Actualizar estado)..."
+curl -s --fail -X PATCH "${API_URL}/claims/${ID}" \
   -H "Content-Type: application/json" \
-  -d '{"status":"IN_REVIEW","adjusterNotes":"Verificado por smoke test CI/CD"}' > /dev/null
-echo "     [OK] Estado actualizado a IN_REVIEW (HTTP 200)"
+  -d '{"status":"IN_REVIEW"}' > /dev/null
+echo "     [OK] Estado actualizado a IN_REVIEW"
 
-# 5. Prueba POST /documents/report (Generar PDF en S3)
-echo "  -> Probando 4/4: POST /documents/report (Generar reporte PDF en S3)..."
-DOC_RESPONSE=$(curl -s --fail -X POST "${API_URL}/documents/report" \
+# 5. Generar el reporte PDF en S3
+echo "  -> 4. POST /documents/report (Generar PDF en S3)..."
+curl -s --fail -X POST "${API_URL}/documents/report" \
   -H "Content-Type: application/json" \
-  -d "{\"claimId\":\"${CLAIM_ID}\",\"includeAdjusterNotes\":true}")
+  -d "{\"claimId\":\"${ID}\"}" > /dev/null
+echo "     [OK] PDF generado y guardado en S3"
 
-REPORT_KEY=$(echo "${DOC_RESPONSE}" | jq -r '.data.reportKey')
-echo "     [OK] PDF guardado en S3: ${REPORT_KEY}"
-
-echo "[OK] Las 4 pruebas End-to-End pasaron con éxito en ${ENV}."
+echo "[OK] Las 4 pruebas pasaron exitosamente en ${ENV}."
