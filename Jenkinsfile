@@ -32,11 +32,13 @@ pipeline {
     }
 
     environment {
-        AWS_DEFAULT_REGION = 'us-east-1'
-        AWS_REGION         = 'us-east-1'
-        PROJECT_NAME       = 'siniestros'
-        BEDROCK_MODEL_ID   = 'amazon.nova-micro-v1:0'
-        PATH               = "${env.HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin:${env.PATH}"
+        AWS_DEFAULT_REGION          = 'us-east-1'
+        AWS_REGION                  = 'us-east-1'
+        AWS_SHARED_CREDENTIALS_FILE = '/var/jenkins_home/.aws/credentials'
+        AWS_CONFIG_FILE             = '/var/jenkins_home/.aws/config'
+        PROJECT_NAME                = 'siniestros'
+        BEDROCK_MODEL_ID            = 'amazon.nova-micro-v1:0'
+        PATH                        = "${env.HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin:${env.PATH}"
     }
 
     stages {
@@ -85,12 +87,14 @@ pipeline {
             steps {
                 dir('backend') {
                     sh '''
+                        npm ci || npm install
                         npm run lint
                         npm test
                     '''
                 }
                 dir('frontend') {
                     sh '''
+                        npm ci || npm install
                         npm run build
                     '''
                 }
