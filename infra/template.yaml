@@ -189,8 +189,27 @@ Resources:
       LogGroupName: !Sub '/aws/apigateway/${ProjectName}-${Env}-api-access'
       RetentionInDays: !Ref LogRetentionDays
 
+  ApiGatewayLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  ApiGatewayAccountConfig:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayLoggingRole.Arn
+
   SiniestrosApi:
     Type: AWS::Serverless::Api
+    DependsOn: ApiGatewayAccountConfig
     Properties:
       Name: !Sub '${ProjectName}-${Env}-api'
       StageName: !Ref Env

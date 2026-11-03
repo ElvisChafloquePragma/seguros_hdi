@@ -168,6 +168,14 @@ pipeline {
             }
             steps {
                 sh '''
+                    # Auto-remediacion: Si el stack quedo en ROLLBACK_COMPLETE, eliminarlo para permitir recreacion limpia
+                    STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "siniestros-dev" --region "${AWS_REGION}" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
+                    if [ "${STACK_STATUS}" = "ROLLBACK_COMPLETE" ]; then
+                        echo "[INFO] Limpiando stack previo en ROLLBACK_COMPLETE..."
+                        aws cloudformation delete-stack --stack-name "siniestros-dev" --region "${AWS_REGION}"
+                        aws cloudformation wait stack-delete-complete --stack-name "siniestros-dev" --region "${AWS_REGION}"
+                    fi
+
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
@@ -187,6 +195,13 @@ pipeline {
             }
             steps {
                 sh '''
+                    STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "siniestros-staging" --region "${AWS_REGION}" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
+                    if [ "${STACK_STATUS}" = "ROLLBACK_COMPLETE" ]; then
+                        echo "[INFO] Limpiando stack previo en ROLLBACK_COMPLETE..."
+                        aws cloudformation delete-stack --stack-name "siniestros-staging" --region "${AWS_REGION}"
+                        aws cloudformation wait stack-delete-complete --stack-name "siniestros-staging" --region "${AWS_REGION}"
+                    fi
+
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
@@ -227,6 +242,13 @@ pipeline {
             }
             steps {
                 sh '''
+                    STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "siniestros-prod" --region "${AWS_REGION}" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
+                    if [ "${STACK_STATUS}" = "ROLLBACK_COMPLETE" ]; then
+                        echo "[INFO] Limpiando stack previo en ROLLBACK_COMPLETE..."
+                        aws cloudformation delete-stack --stack-name "siniestros-prod" --region "${AWS_REGION}"
+                        aws cloudformation wait stack-delete-complete --stack-name "siniestros-prod" --region "${AWS_REGION}"
+                    fi
+
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
