@@ -41,9 +41,7 @@ Finalmente, el bloque **`Environment.Variables`** inyecta a nivel de sistema ope
 
 "El Bloque 1 atiende las exigencias de ciberseguridad y la **Circular Externa 007 de 2018 de la SFC**:
 
-Aprovisionamos la llave administrada por el cliente **`AppKmsKey` (AWS KMS CMK)** con **rotación anual automática (`EnableKeyRotation: true`)** y una ventana de eliminación de 7 días. Su **`KeyPolicy`** está diseñado con dos declaraciones vitales:
-1. **`EnableRootAdminPermissions`**: Delega la administración a la cuenta de AWS para que las políticas de IAM de los roles puedan utilizarla, evitando crear una llave inaccesible.
-2. **`AllowCloudWatchAlarmsAndSNS`**: Otorga permisos explícitos de `kms:Decrypt` y `kms:GenerateDataKey*` a los servicios de **CloudWatch y SNS**, garantizando que las alertas de incidentes puedan cifrarse y viajar sin fallar silenciosamente.
+Aprovisionamos la llave administrada por el cliente **`AppKmsKey` (AWS KMS CMK)** con **rotación anual automática (`EnableKeyRotation: true`)** y una ventana de eliminación de 7 días. Su **`KeyPolicy`** implementa la declaración **`EnableRootAdminPermissions`**, delegando la administración a la cuenta de AWS para que las políticas de IAM de los roles de las Lambdas puedan utilizarla de forma granular, evitando crear una llave inaccesible. Esta llave se encarga de cifrar en reposo los tres lugares donde residen datos confidenciales (PII): la tabla **DynamoDB**, el bucket **S3 de Reportes** y las credenciales en **Secrets Manager**.
 
 Junto a la llave, creamos **`IntegrationSecret` en AWS Secrets Manager** cifrado bajo nuestra CMK. Para evitar secretos expuestos en Git o digitados manualmente, usamos la propiedad **`GenerateSecretString`**: AWS genera de forma criptográfica y automática un API Key de 24 caracteres sin caracteres especiales (`ExcludePunctuation: true`) durante el despliegue. Esto asegura que la integración con proveedores de asistencia vehicular nazca segura, pasando completamente limpios los escaneos de **Gitleaks**."
 

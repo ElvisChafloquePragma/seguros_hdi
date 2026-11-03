@@ -12,7 +12,7 @@ Parameters:
   ProjectName:
     Type: String
     Default: siniestros
-    Description: Prefijo de los recursos (permite recrear el stack con otro nombre en vivo sin colisiones)
+    Description: Prefijo de los recursos 
   NodeRuntime:
     Type: String
     Default: nodejs22.x
@@ -48,7 +48,7 @@ Parameters:
     Type: Number
     Default: 14
     AllowedValues: [7, 14, 30, 90, 180, 365]
-    Description: Dias de retencion de logs en CloudWatch (365 en prod por SFC)
+    Description: Dias de retencion de logs en CloudWatch 
   CustomDomainCertificateArn:
     Type: String
     Default: ''
@@ -80,9 +80,7 @@ Globals:
         KMS_KEY_ARN: !GetAtt AppKmsKey.Arn
 
 Resources:
-  # ============================================================================
-  # 1. SEGURIDAD (SFC): KMS Key (Rotacion Anual) + Secrets Manager
-  # ============================================================================
+  # 1. SEGURIDAD : KMS Key (Rotacion activa) + Secrets Manager
   AppKmsKey:
     Type: AWS::KMS::Key
     Properties:
@@ -97,16 +95,6 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
-            Resource: '*'
-          - Sid: AllowCloudWatchAlarmsAndSNS
-            Effect: Allow
-            Principal:
-              Service:
-                - cloudwatch.amazonaws.com
-                - sns.amazonaws.com
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey*'
             Resource: '*'
 
   IntegrationSecret:

@@ -2,7 +2,7 @@
 set -e
 
 # ==============================================================================
-# SCRIPT 1: Validación de Parámetros por Ambiente (Shift-Left Validation)
+# Validación de Parámetros por Ambiente 
 # Valida que dev.json, staging.json y prod.json cumplan las reglas de schema.json
 # ==============================================================================
 
