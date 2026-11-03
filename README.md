@@ -6,6 +6,8 @@ Solución integral **End-to-End** para la aplicación serverless de **registro d
 
 ## 1. Arquitectura Implementada (Flujo de Componentes en AWS)
 
+![Diagrama de Arquitectura](./docs/arquitectura-hdi.jpg)
+
 | Capa | Componente AWS (`infra/template.yaml`) | Función Principal | Conexión Siguiente |
 |---|---|---|---|
 | **1. Entrada y Perímetro** | **AWS WAFv2 (`FrontendWebACL`) + Amazon CloudFront (`CloudFrontDistribution`)** | Filtra ataques OWASP en `prod`, fuerza HTTPS (`TLS 1.2+`) y sirve el portal con firma **OAC (`SigV4`)**. | `/*` → Bucket S3 Frontend<br>`/api/v1/*` → API Gateway |
