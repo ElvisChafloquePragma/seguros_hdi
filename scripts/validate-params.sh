@@ -10,14 +10,10 @@ SCHEMA="infra/params/schema.json"
 
 echo "[INFO] Validando archivos de parámetros contra ${SCHEMA}..."
 
-# Recorremos cada ambiente y validamos su estructura JSON
+# Recorremos cada ambiente y validamos su estructura JSON contra schema.json
 for archivo in infra/params/dev.json infra/params/staging.json infra/params/prod.json; do
-  echo "  -> Revisando ${archivo}..."
-  if command -v check-jsonschema >/dev/null 2>&1; then
-    check-jsonschema --schemafile "${SCHEMA}" "${archivo}"
-  else
-    python3 -m json.tool "${archivo}" > /dev/null
-  fi
+  echo "  -> Revisando ${archivo} contra ${SCHEMA}..."
+  check-jsonschema --schemafile "${SCHEMA}" "${archivo}"
 done
 
-echo "[OK] Todos los parámetros (dev, staging, prod) son válidos."
+echo "[OK] Todos los parámetros (dev, staging, prod) cumplen con schema.json."
