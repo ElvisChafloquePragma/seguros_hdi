@@ -19,16 +19,6 @@ pipeline {
             defaultValue: false,
             description: 'Solo para pruebas automatizadas de laboratorio (en operacion real requiere aprobacion manual)'
         )
-        booleanParam(
-            name: 'FORCE_ROLLBACK',
-            defaultValue: false,
-            description: 'Activar para revertir inmediatamente un ambiente al ultimo artefacto inmutable estable'
-        )
-        string(
-            name: 'ROLLBACK_COMMIT_SHA',
-            defaultValue: '',
-            description: 'SHA del artefacto inmutable a restaurar en caso de FORCE_ROLLBACK=true'
-        )
     }
 
     environment {

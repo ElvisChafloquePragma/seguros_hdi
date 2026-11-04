@@ -8,7 +8,7 @@
 * **`timestamps()`**: Registra el segundo exacto de cada línea del log (obligatorio para auditoría forense SFC).
 * **`disableConcurrentBuilds()`**: Evita que dos despliegues corran al mismo tiempo y bloqueen el estado de CloudFormation.
 * **`buildDiscarder(numToKeepStr: '30')`**: Limpia automáticamente builds antiguos para no llenar el disco del servidor Jenkins.
-* **`parameters`**: Permite elegir el ambiente objetivo (`TARGET_ENV`) o activar contingencias de reversión (`FORCE_ROLLBACK`).
+* **`parameters`**: Permite elegir el ambiente objetivo (`TARGET_ENV`) en ejecuciones manuales.
 * **`environment`**: Centraliza la región `us-east-1`, las rutas de credenciales de AWS y el modelo de IA (`amazon.nova-micro-v1:0`).
 
 ---
