@@ -110,7 +110,7 @@ Resources:
         ExcludePunctuation: true
 
   # ============================================================================
-  # 2. CAPA DE DATOS: DynamoDB Table (On-Demand + PITR + KMS) y S3 Documentos
+  #  CAPA DE DATOS: DynamoDB Table (On-Demand + PITR + KMS) y S3 Documentos
   # ============================================================================
   ClaimsTable:
     Type: AWS::DynamoDB::Table
@@ -160,7 +160,7 @@ Resources:
                 StorageClass: GLACIER_IR
 
   # ============================================================================
-  # 3. API GATEWAY REST + COGNITO USER POOL
+  #  API GATEWAY REST + COGNITO USER POOL
   # ============================================================================
   AgentsUserPool:
     Type: AWS::Cognito::UserPool
@@ -215,7 +215,7 @@ Resources:
             UserPoolArn: !GetAtt AgentsUserPool.Arn
 
   # ============================================================================
-  # 4. COMPUTE: Funciones Lambda (Node.js 22 arm64) + CodeDeploy Canary + LogGroup SFC
+  # COMPUTE: Funciones Lambda (Node.js 22 arm64) + CodeDeploy Canary + LogGroup SFC
   # ============================================================================
   ClaimsFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -324,7 +324,7 @@ Resources:
             Method: POST
 
   # ============================================================================
-  # 5. FRONTEND SPA (S3 Bucket Privado + CloudFront CDN + OAC + WAFv2)
+  # FRONTEND SPA (S3 Bucket Privado + CloudFront CDN + OAC + WAFv2)
   # ============================================================================
   FrontendBucket:
     Type: AWS::S3::Bucket
@@ -450,7 +450,7 @@ Resources:
                 AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
 
   # ============================================================================
-  # 6. OBSERVABILIDAD: SNS + Alarmas Criticas (Rollback) + Dashboard DORA
+  #OBSERVABILIDAD: SNS + Alarmas Criticas (Rollback) + Dashboard DORA
   # ============================================================================
   AlertsTopic:
     Type: AWS::SNS::Topic

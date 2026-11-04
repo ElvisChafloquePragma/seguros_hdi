@@ -23,7 +23,6 @@ else
 fi
 
 # PASO 2: Consultar a Amazon Bedrock
-# Si la cuenta tiene acceso a Bedrock, usamos la respuesta de la IA. Si no, usamos el dictamen de respaldo.
 if aws bedrock-runtime converse \
     --model-id "${MODELO_IA}" \
     --region "${REGION}" \
