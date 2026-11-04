@@ -147,7 +147,7 @@ pipeline {
                         aws cloudformation wait stack-delete-complete --stack-name "siniestros-dev" --region "${AWS_REGION}"
                     fi
 
-                    PARAMS=$(jq -r 'to_entries | map("\(.key)=\(.value)") | join(" ")' infra/params/dev.json)
+                    PARAMS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(' '.join(k + '=' + str(v) for k,v in d.items()))" infra/params/dev.json)
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
@@ -175,7 +175,7 @@ pipeline {
                         aws cloudformation wait stack-delete-complete --stack-name "siniestros-staging" --region "${AWS_REGION}"
                     fi
 
-                    PARAMS=$(jq -r 'to_entries | map("\(.key)=\(.value)") | join(" ")' infra/params/staging.json)
+                    PARAMS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(' '.join(k + '=' + str(v) for k,v in d.items()))" infra/params/staging.json)
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
@@ -224,7 +224,7 @@ pipeline {
                         aws cloudformation wait stack-delete-complete --stack-name "siniestros-prod" --region "${AWS_REGION}"
                     fi
 
-                    PARAMS=$(jq -r 'to_entries | map("\(.key)=\(.value)") | join(" ")' infra/params/prod.json)
+                    PARAMS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(' '.join(k + '=' + str(v) for k,v in d.items()))" infra/params/prod.json)
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
