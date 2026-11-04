@@ -14,11 +14,6 @@ pipeline {
             choices: ['all (dev -> staging -> prod)', 'dev', 'staging', 'prod'],
             description: 'Ambiente objetivo de despliegue'
         )
-        booleanParam(
-            name: 'SKIP_PROD_APPROVAL',
-            defaultValue: false,
-            description: 'Solo para pruebas automatizadas de laboratorio (en operacion real requiere aprobacion manual)'
-        )
     }
 
     environment {
@@ -211,7 +206,7 @@ pipeline {
 
         stage('7. Manual Approval for PRODUCTION (SFC Audit Gate)') {
             when {
-                expression { return (env.EFFECTIVE_ENV == 'all (dev -> staging -> prod)' || env.EFFECTIVE_ENV == 'prod') && !params.SKIP_PROD_APPROVAL }
+                expression { return env.EFFECTIVE_ENV == 'all (dev -> staging -> prod)' || env.EFFECTIVE_ENV == 'prod' }
             }
             steps {
                 script {
