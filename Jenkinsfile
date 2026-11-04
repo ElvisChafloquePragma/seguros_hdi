@@ -8,6 +8,11 @@ pipeline {
         timeout(time: 60, unit: 'MINUTES')
     }
 
+    triggers {
+        // Dispara el build automaticamente al detectar un 'git push' en el repositorio
+        pollSCM('H/2 * * * *')
+    }
+
     parameters {
         choice(
             name: 'TARGET_ENV',
