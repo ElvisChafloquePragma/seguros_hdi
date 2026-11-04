@@ -176,10 +176,12 @@ pipeline {
                         aws cloudformation wait stack-delete-complete --stack-name "siniestros-dev" --region "${AWS_REGION}"
                     fi
 
+                    PARAMS=$(jq -r 'to_entries | map("\(.key)=\(.value)") | join(" ")' infra/params/dev.json)
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
                       --config-env dev \
+                      --parameter-overrides ${PARAMS} \
                       --region "${AWS_REGION}"
 
                     bash scripts/deploy-frontend.sh dev
@@ -202,10 +204,12 @@ pipeline {
                         aws cloudformation wait stack-delete-complete --stack-name "siniestros-staging" --region "${AWS_REGION}"
                     fi
 
+                    PARAMS=$(jq -r 'to_entries | map("\(.key)=\(.value)") | join(" ")' infra/params/staging.json)
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
                       --config-env staging \
+                      --parameter-overrides ${PARAMS} \
                       --region "${AWS_REGION}"
 
                     bash scripts/deploy-frontend.sh staging
@@ -249,10 +253,12 @@ pipeline {
                         aws cloudformation wait stack-delete-complete --stack-name "siniestros-prod" --region "${AWS_REGION}"
                     fi
 
+                    PARAMS=$(jq -r 'to_entries | map("\(.key)=\(.value)") | join(" ")' infra/params/prod.json)
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
                       --config-env prod \
+                      --parameter-overrides ${PARAMS} \
                       --region "${AWS_REGION}"
 
                     bash scripts/deploy-frontend.sh prod
