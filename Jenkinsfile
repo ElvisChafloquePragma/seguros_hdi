@@ -78,11 +78,12 @@ pipeline {
                     steps {
                         sh '''
                             mkdir -p reports
-                            if command -v gitleaks >/dev/null 2>&1; then
-                                gitleaks detect --source=. --no-git --redact --report-format=json --report-path=reports/gitleaks-all.json || true
-                            else
-                                echo '{"findings":[],"status":"skipped_tool_missing"}' > reports/gitleaks-all.json
+                            if ! command -v gitleaks >/dev/null 2>&1; then
+                                echo "[ERROR] Gitleaks no esta instalado en el runner. Quality Gate bloqueado por SFC." >&2
+                                exit 1
                             fi
+                            # Quality Gate Bloqueante: Si detecta secretos en el repositorio, falla inmediatamente (exit 1)
+                            gitleaks detect --source=. --no-git --redact --report-format=json --report-path=reports/gitleaks-all.json
                         '''
                     }
                 }
@@ -90,18 +91,27 @@ pipeline {
                     steps {
                         sh '''
                             mkdir -p reports
-                            if command -v semgrep >/dev/null 2>&1; then
-                                semgrep scan --config auto backend/claims backend/documents --json --output reports/semgrep-sast.json || true
-                            else
-                                echo '{"results":[],"status":"skipped_tool_missing"}' > reports/semgrep-sast.json
+                            if ! command -v semgrep >/dev/null 2>&1; then
+                                echo "[ERROR] Semgrep no esta instalado en el runner. Quality Gate bloqueado por SFC." >&2
+                                exit 1
                             fi
+                            # Quality Gate SAST: Analiza codigo de Lambdas contra vulnerabilidades OWASP (exit 1 si hay fallas)
+                            semgrep scan --config auto backend/claims backend/documents --json --output reports/semgrep-sast.json --error
                         '''
                     }
                 }
                 stage('4c. SCA Dependency Audit (npm audit)') {
                     steps {
                         dir('backend') {
-                            sh 'mkdir -p ../reports && npm audit --audit-level=high --json > ../reports/npm-audit-backend.json || true'
+                            sh '''
+                                mkdir -p ../reports
+                                if ! command -v npm >/dev/null 2>&1; then
+                                    echo "[ERROR] npm no esta instalado en el runner. Quality Gate bloqueado por SFC." >&2
+                                    exit 1
+                                fi
+                                # Quality Gate Bloqueante: Falla inmediatamente si existen vulnerabilidades HIGH o CRITICAL
+                                npm audit --audit-level=high --json > ../reports/npm-audit-backend.json
+                            '''
                         }
                     }
                 }
@@ -109,33 +119,45 @@ pipeline {
                     steps {
                         sh '''
                             mkdir -p reports
-                            if command -v checkov >/dev/null 2>&1; then
-                                checkov -f infra/template.yaml \
-                                  --framework cloudformation \
-                                  --soft-fail \
-                                  --compact --quiet \
-                                  -o cli > reports/checkov-iac.txt || true
-                            else
-                                echo 'CHECKOV NO EJECUTADO: skipped_tool_missing' > reports/checkov-iac.txt
+                            if ! command -v checkov >/dev/null 2>&1; then
+                                echo "[ERROR] Checkov no esta instalado en el runner. Quality Gate bloqueado por SFC." >&2
+                                exit 1
                             fi
+                            # Cargar excepciones arquitectonicas auditadas desde .security-exceptions.yaml (Cumplimiento SFC)
+                            SKIPPED_CHECKS=$(python3 -c "import yaml; print(','.join(e['id'] for e in yaml.safe_load(open('.security-exceptions.yaml'))['exceptions']))" 2>/dev/null || echo "")
+                            echo "[INFO] Excepciones arquitectonicas aplicadas desde .security-exceptions.yaml: ${SKIPPED_CHECKS}"
+
+                            # Quality Gate Bloqueante: Sin --soft-fail. Si hay hallazgos no justificados en SFC, falla inmediatamente (exit 1)
+                            checkov -f infra/template.yaml \
+                              --framework cloudformation \
+                              --skip-check "${SKIPPED_CHECKS}" \
+                              --compact --quiet \
+                              -o cli > reports/checkov-iac.txt
+                            cat reports/checkov-iac.txt
                         '''
                     }
                 }
             }
             post {
-                success {
-                    echo '[AI Case #2] Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock...'
+                always {
                     sh '''
                         : > reports/combined-security.txt
                         for f in gitleaks-all.json semgrep-sast.json npm-audit-backend.json checkov-iac.txt; do
-                            echo "=== reports/${f} ===" >> reports/combined-security.txt
-                            cat reports/${f} >> reports/combined-security.txt
-                            echo "" >> reports/combined-security.txt
+                            if [ -f "reports/${f}" ]; then
+                                echo "=== reports/${f} ===" >> reports/combined-security.txt
+                                cat "reports/${f}" >> reports/combined-security.txt
+                                echo "" >> reports/combined-security.txt
+                            fi
                         done
+                    '''
+                    archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+                }
+                success {
+                    echo '[AI Case #2] Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock...'
+                    sh '''
                         bash scripts/ai-devops-assistant.sh triage reports/combined-security.txt reports/security-summary.md
                         cat reports/security-summary.md
                     '''
-                    archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
                 }
             }
         }

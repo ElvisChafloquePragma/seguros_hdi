@@ -11,10 +11,23 @@ REGION="${AWS_REGION:-us-east-1}"
 
 echo "[INFO] Ejecutando Asistente de IA en modo '${MODO}'..."
 
-# PASO 1: Extraer el contenido del archivo de entrada para el contexto de la IA
+# Sanitización de PII antes de enviar contexto a la IA (Cumplimiento SFC Ley 1581 / CE 007)
+sanitize_pii() {
+  local texto="$1"
+  # Enmascarar correos electrónicos
+  texto=$(echo "${texto}" | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[REDACTED_EMAIL]/g')
+  # Enmascarar llaves de acceso AWS (AKIA...)
+  texto=$(echo "${texto}" | sed -E 's/AKIA[0-9A-Z]{16}/[REDACTED_AWS_KEY]/g')
+  # Enmascarar números de identificación personal (cédulas colombianas 7 a 10 dígitos)
+  texto=$(echo "${texto}" | sed -E 's/\b[0-9]{7,10}\b/[REDACTED_ID]/g')
+  echo "${texto}"
+}
+
+# PASO 1: Extraer el contenido del archivo de entrada y sanitizar PII
 DATOS_ENTRADA=""
 if [ -n "${ARCHIVO_ENTRADA}" ] && [ -f "${ARCHIVO_ENTRADA}" ]; then
-  DATOS_ENTRADA=$(head -c 15000 "${ARCHIVO_ENTRADA}" | tr '"\r\n' '   ')
+  BRUTO=$(head -c 15000 "${ARCHIVO_ENTRADA}" | tr '"\r\n' '   ')
+  DATOS_ENTRADA=$(sanitize_pii "${BRUTO}")
 fi
 
 # PASO 2: Definir el prompt para la IA según el caso
