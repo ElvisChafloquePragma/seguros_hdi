@@ -80,7 +80,7 @@ Globals:
         KMS_KEY_ARN: !GetAtt AppKmsKey.Arn
 
 Resources:
-  # 1. SEGURIDAD : KMS Key (Rotacion activa) + Secrets Manager
+  #  SEGURIDAD : KMS Key (Rotacion activa) + Secrets Manager
   AppKmsKey:
     Type: AWS::KMS::Key
     Properties:
@@ -109,9 +109,7 @@ Resources:
         PasswordLength: 24
         ExcludePunctuation: true
 
-  # ============================================================================
   #  CAPA DE DATOS: DynamoDB Table (On-Demand + PITR + KMS) y S3 Documentos
-  # ============================================================================
   ClaimsTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: !If [IsProd, Retain, Delete]
@@ -159,9 +157,7 @@ Resources:
               - TransitionInDays: 365
                 StorageClass: GLACIER_IR
 
-  # ============================================================================
   #  API GATEWAY REST + COGNITO USER POOL
-  # ============================================================================
   AgentsUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -214,9 +210,7 @@ Resources:
           CognitoAgentAuthorizer:
             UserPoolArn: !GetAtt AgentsUserPool.Arn
 
-  # ============================================================================
   # COMPUTE: Funciones Lambda (Node.js 22 arm64) + CodeDeploy Canary + LogGroup SFC
-  # ============================================================================
   ClaimsFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -323,9 +317,7 @@ Resources:
             Path: /api/v1/documents/report
             Method: POST
 
-  # ============================================================================
   # FRONTEND SPA (S3 Bucket Privado + CloudFront CDN + OAC + WAFv2)
-  # ============================================================================
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -449,9 +441,8 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
 
-  # ============================================================================
   #OBSERVABILIDAD: SNS + Alarmas Criticas (Rollback) + Dashboard DORA
-  # ============================================================================
+
   AlertsTopic:
     Type: AWS::SNS::Topic
     Properties:

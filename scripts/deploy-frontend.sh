@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-# ==============================================================================
-# SCRIPT 2: Despliegue de Frontend React (S3 + Invalidación CloudFront)
-# 1. Consulta en CloudFormation el nombre del Bucket S3 y el ID de CloudFront.
-# 2. Sube los archivos .js y .css con caché de 1 año (inmutables).
-# 3. Sube index.html sin caché para que el usuario siempre vea la última versión.
-# 4. Invalida /index.html en CloudFront.
-# ==============================================================================
+# Despliegue de Frontend React (S3 + Invalidación CloudFront)
 
 ENV="${1:-dev}"
 STACK_NAME="siniestros-${ENV}"

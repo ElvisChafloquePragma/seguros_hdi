@@ -1,17 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
-# ==============================================================================
-# SCRIPT 5: Asistente DevOps con IA (Amazon Bedrock)
-# ¿Qué hace? Le pide a la IA de AWS que analice los reportes reales:
-#   1. Modo "triage": Resume la seguridad para el aprobador de Producción.
-#   2. Modo "failure": Si el pipeline falla, explica el error y cómo arreglarlo.
-# ==============================================================================
+# Asistente DevOps con IA (Amazon Bedrock)
 
-MODO="${1:-triage}"                        # Puede ser "triage" o "failure"
-ARCHIVO_ENTRADA="${2:-}"                   # Archivo con los hallazgos de seguridad o logs de error
-ARCHIVO_SALIDA="${3:-security-summary.md}" # Archivo Markdown resultante
-MODELO_IA="amazon.nova-micro-v1:0"         # Modelo rápido y económico de AWS Bedrock
+MODO="${1:-triage}"                     
+ARCHIVO_ENTRADA="${2:-}"                 
+ARCHIVO_SALIDA="${3:-security-summary.md}" 
+MODELO_IA="amazon.nova-micro-v1:0"       
 REGION="${AWS_REGION:-us-east-1}"
 
 echo "[INFO] Ejecutando Asistente de IA en modo '${MODO}'..."
@@ -19,7 +14,6 @@ echo "[INFO] Ejecutando Asistente de IA en modo '${MODO}'..."
 # PASO 1: Extraer el contenido del archivo de entrada para el contexto de la IA
 DATOS_ENTRADA=""
 if [ -n "${ARCHIVO_ENTRADA}" ] && [ -f "${ARCHIVO_ENTRADA}" ]; then
-  # Tomamos hasta 2500 caracteres y limpiamos saltos de línea y comillas dobles
   DATOS_ENTRADA=$(head -c 2500 "${ARCHIVO_ENTRADA}" | tr '"\r\n' '   ')
 fi
 
