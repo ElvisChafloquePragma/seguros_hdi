@@ -8,11 +8,6 @@ pipeline {
         timeout(time: 60, unit: 'MINUTES')
     }
 
-    triggers {
-        // Dispara el build automaticamente al detectar un 'git push' en el repositorio
-        pollSCM('H/2 * * * *')
-    }
-
     parameters {
         choice(
             name: 'TARGET_ENV',
@@ -40,22 +35,8 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    // Deteccion automatica de ambiente segun la rama de Git
-                    def currentBranch = env.BRANCH_NAME ?: sh(script: 'git rev-parse --abbrev-ref HEAD 2>/dev/null || echo ""', returnStdout: true).trim()
-                    if (currentBranch == 'develop') {
-                        env.EFFECTIVE_ENV = 'dev'
-                    } else if (currentBranch == 'staging' || currentBranch.startsWith('release/')) {
-                        env.EFFECTIVE_ENV = 'staging'
-                    } else if (currentBranch == 'main' || currentBranch == 'master') {
-                        env.EFFECTIVE_ENV = (params.TARGET_ENV == 'dev' || params.TARGET_ENV == 'staging') ? params.TARGET_ENV : 'prod'
-                    } else {
-                        env.EFFECTIVE_ENV = params.TARGET_ENV
-                    }
-
-                    echo "[CI/CD] Rama detectada='${currentBranch}' -> Ambiente efectivo='${env.EFFECTIVE_ENV}' | Commit=${env.GIT_COMMIT_SHORT}"
-
-                    // Plus CI/CD: Descripcion ejecutiva dinamica en la interfaz web de Jenkins
-                    currentBuild.description = "Commit: ${env.GIT_COMMIT_SHORT} | Rama: ${currentBranch} | Env: ${env.EFFECTIVE_ENV}"
+                    echo "[CI/CD] Ambiente seleccionado='${params.TARGET_ENV}' | Commit=${env.GIT_COMMIT_SHORT}"
+                    currentBuild.description = "Commit: ${env.GIT_COMMIT_SHORT} | Env: ${params.TARGET_ENV}"
                 }
                 sh 'mkdir -p reports'
             }
@@ -154,7 +135,7 @@ pipeline {
 
         stage('5. Deploy to DEV & Smoke Tests') {
             when {
-                expression { return env.EFFECTIVE_ENV == 'all (dev -> staging -> prod)' || env.EFFECTIVE_ENV == 'dev' }
+                expression { return params.TARGET_ENV == 'all (dev -> staging -> prod)' || params.TARGET_ENV == 'dev' }
             }
             steps {
                 sh '''
@@ -183,7 +164,7 @@ pipeline {
 
         stage('6. Deploy to STAGING & Integration Tests') {
             when {
-                expression { return env.EFFECTIVE_ENV == 'all (dev -> staging -> prod)' || env.EFFECTIVE_ENV == 'staging' }
+                expression { return params.TARGET_ENV == 'all (dev -> staging -> prod)' || params.TARGET_ENV == 'staging' }
             }
             steps {
                 sh '''
@@ -211,7 +192,7 @@ pipeline {
 
         stage('7. Manual Approval for PRODUCTION (SFC Audit Gate)') {
             when {
-                expression { return env.EFFECTIVE_ENV == 'all (dev -> staging -> prod)' || env.EFFECTIVE_ENV == 'prod' }
+                expression { return params.TARGET_ENV == 'all (dev -> staging -> prod)' || params.TARGET_ENV == 'prod' }
             }
             steps {
                 script {
@@ -232,7 +213,7 @@ pipeline {
 
         stage('8. Deploy to PROD (Canary + Auto-Rollback + CloudFront Invalidation)') {
             when {
-                expression { return env.EFFECTIVE_ENV == 'all (dev -> staging -> prod)' || env.EFFECTIVE_ENV == 'prod' }
+                expression { return params.TARGET_ENV == 'all (dev -> staging -> prod)' || params.TARGET_ENV == 'prod' }
             }
             steps {
                 sh '''
