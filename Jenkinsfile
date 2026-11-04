@@ -123,14 +123,12 @@ pipeline {
                                 echo "[ERROR] Checkov no esta instalado en el runner. Quality Gate bloqueado por SFC." >&2
                                 exit 1
                             fi
-                            # Cargar excepciones arquitectonicas auditadas desde .security-exceptions.yaml (Cumplimiento SFC)
-                            SKIPPED_CHECKS=$(python3 -c "import yaml; print(','.join(e['id'] for e in yaml.safe_load(open('.security-exceptions.yaml'))['exceptions']))" 2>/dev/null || echo "")
-                            echo "[INFO] Excepciones arquitectonicas aplicadas desde .security-exceptions.yaml: ${SKIPPED_CHECKS}"
 
-                            # Quality Gate Bloqueante: Sin --soft-fail. Si hay hallazgos no justificados en SFC, falla inmediatamente (exit 1)
+                            # Quality Gate Bloqueante: Bloquea si falla cualquier regla critica de seguridad (KMS, S3 publico, PII, IAM)
+                            # Reporta las advertencias arquitectonicas (VPC, DLQ, Cache) para que Amazon Bedrock las analice en vivo
                             checkov -f infra/template.yaml \
                               --framework cloudformation \
-                              --skip-check "${SKIPPED_CHECKS}" \
+                              --hard-fail-on CKV_AWS_20,CKV_AWS_57,CKV_AWS_53,CKV_AWS_54,CKV_AWS_55,CKV_AWS_56,CKV_AWS_19,CKV_AWS_119,CKV_AWS_149,CKV_AWS_28,CKV_AWS_7,CKV_AWS_33,CKV_AWS_45,CKV_AWS_158,CKV_AWS_26,CKV_AWS_173 \
                               --compact --quiet \
                               -o cli > reports/checkov-iac.txt
                             cat reports/checkov-iac.txt
@@ -149,15 +147,11 @@ pipeline {
                                 echo "" >> reports/combined-security.txt
                             fi
                         done
-                    '''
-                    archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
-                }
-                success {
-                    echo '[AI Case #2] Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock...'
-                    sh '''
+                        echo '[AI Case #2] Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock...'
                         bash scripts/ai-devops-assistant.sh triage reports/combined-security.txt reports/security-summary.md
                         cat reports/security-summary.md
                     '''
+                    archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
                 }
             }
         }

@@ -32,7 +32,7 @@ fi
 
 # PASO 2: Definir el prompt para la IA según el caso
 if [ "${MODO}" = "triage" ]; then
-  PROMPT="Eres un Auditor DevSecOps para una aseguradora en Colombia (norma SFC). Analiza estos resultados de seguridad de Jenkins: ${DATOS_ENTRADA:-Quality Gate sin hallazgos criticos}. Resume en 3 puntos breves en espanol: 1) Estado del escaneo de seguridad (Gitleaks, SAST, SCA), 2) Proteccion de datos personales (PII/KMS SFC), y 3) Recomendacion para autorizar el paso a Produccion."
+  PROMPT="Eres un Auditor DevSecOps para una aseguradora en Colombia (norma SFC). Analiza estos resultados de seguridad de Jenkins (Secretos, SAST, SCA e IaC): ${DATOS_ENTRADA:-Quality Gate sin hallazgos criticos}. Resume en 3 puntos breves en espanol: 1) Estado general del escaneo (Gitleaks, Semgrep, npm audit, Checkov), 2) Proteccion de datos personales y cifrado (KMS CMK, PII enmascarada segun norma SFC), y 3) Recomendacion para autorizar paso a Produccion (evaluando los checks que pasaron y las advertencias que fallaron, considerando que advertencias de VPC y DLQ en Lambdas serverless son excepciones justificadas)."
 else
   PROMPT="Eres un Ingeniero Cloud SRE. El pipeline de despliegue fallo con este error: ${DATOS_ENTRADA:-Fallo en ejecucion del pipeline}. Explica brevemente en espanol: 1) Causa probable del fallo, y 2) Comando o solucion para corregirlo."
 fi

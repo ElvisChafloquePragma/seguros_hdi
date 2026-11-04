@@ -67,6 +67,7 @@ Globals:
     MemorySize: !Ref LambdaMemorySize
     Timeout: !Ref LambdaTimeout
     Tracing: Active
+    KmsKeyArn: !GetAtt AppKmsKey.Arn
     LoggingConfig:
       LogFormat: JSON
       ApplicationLogLevel: INFO
@@ -95,6 +96,28 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudWatchLogs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt*'
+              - 'kms:Decrypt*'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Describe*'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+          - Sid: AllowSNS
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action:
+              - 'kms:GenerateDataKey*'
+              - 'kms:Decrypt'
             Resource: '*'
 
   IntegrationSecret:
@@ -172,6 +195,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/apigateway/${ProjectName}-${Env}-api-access'
       RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt AppKmsKey.Arn
 
   ApiGatewayLoggingRole:
     Type: AWS::IAM::Role
@@ -216,6 +240,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ProjectName}-${Env}-claims'
       RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt AppKmsKey.Arn
       DataProtectionPolicy:
         Name: SFC-PII-DataProtectionPolicy
         Description: Enmascara automaticamente PII (Email, Telefono, Credenciales) en CloudWatch Logs desde IaC sin depender del backend
@@ -447,6 +472,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub '${ProjectName}-${Env}-critical-alerts'
+      KmsMasterKeyId: !Ref AppKmsKey
 
   ClaimsFunctionErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
