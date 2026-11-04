@@ -72,7 +72,7 @@ pipeline {
             }
         }
 
-        stage('4. Security Scan (DevSecOps Gate + AI Triage)') {
+        stage('4. Security Scan') {
             parallel {
                 stage('4a. Secret Scanning (Gitleaks)') {
                     steps {
