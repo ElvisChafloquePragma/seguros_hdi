@@ -77,12 +77,11 @@ pipeline {
                 stage('4a. Secret Scanning (Gitleaks)') {
                     steps {
                         sh '''
+                            mkdir -p reports
                             if command -v gitleaks >/dev/null 2>&1; then
-                                gitleaks detect --source backend --no-git --redact --report-format json --report-path reports/gitleaks-backend.json || true
-                                gitleaks detect --source frontend --no-git --redact --report-format json --report-path reports/gitleaks-frontend.json || true
-                                gitleaks detect --source infra --no-git --redact --report-format json --report-path reports/gitleaks-infra.json || true
+                                gitleaks detect --source=. --no-git --redact --report-format=json --report-path=reports/gitleaks-all.json || true
                             else
-                                echo '{"findings":[],"status":"skipped_tool_missing"}' > reports/gitleaks-backend.json
+                                echo '{"findings":[],"status":"skipped_tool_missing"}' > reports/gitleaks-all.json
                             fi
                         '''
                     }
@@ -90,8 +89,9 @@ pipeline {
                 stage('4b. SAST (Semgrep OWASP)') {
                     steps {
                         sh '''
+                            mkdir -p reports
                             if command -v semgrep >/dev/null 2>&1; then
-                                semgrep scan --config p/default backend/claims backend/documents --json --output reports/semgrep-sast.json || true
+                                semgrep scan --config auto backend/claims backend/documents --json --output reports/semgrep-sast.json || true
                             else
                                 echo '{"results":[],"status":"skipped_tool_missing"}' > reports/semgrep-sast.json
                             fi
@@ -101,13 +101,14 @@ pipeline {
                 stage('4c. SCA Dependency Audit (npm audit)') {
                     steps {
                         dir('backend') {
-                            sh 'npm audit --audit-level=high --json > ../reports/npm-audit-backend.json || true'
+                            sh 'mkdir -p ../reports && npm audit --audit-level=high --json > ../reports/npm-audit-backend.json || true'
                         }
                     }
                 }
                 stage('4d. IaC Security Scan (Checkov)') {
                     steps {
                         sh '''
+                            mkdir -p reports
                             if command -v checkov >/dev/null 2>&1; then
                                 checkov -f infra/template.yaml \
                                   --framework cloudformation \
@@ -124,7 +125,7 @@ pipeline {
                 success {
                     echo '[AI Case #2] Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock...'
                     sh '''
-                        cat reports/npm-audit-backend.json reports/gitleaks-backend.json > reports/combined-security.txt || true
+                        cat reports/gitleaks-all.json reports/semgrep-sast.json reports/npm-audit-backend.json reports/checkov-iac.json > reports/combined-security.txt || true
                         bash scripts/ai-devops-assistant.sh triage reports/combined-security.txt reports/security-summary.md
                         cat reports/security-summary.md
                     '''
