@@ -125,7 +125,7 @@ pipeline {
                 success {
                     echo '[AI Case #2] Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock...'
                     sh '''
-                        cat reports/gitleaks-all.json reports/semgrep-sast.json reports/npm-audit-backend.json reports/checkov-iac.json > reports/combined-security.txt || true
+                        python3 scripts/summarize-security.py reports reports/combined-security.txt
                         bash scripts/ai-devops-assistant.sh triage reports/combined-security.txt reports/security-summary.md
                         cat reports/security-summary.md
                     '''
