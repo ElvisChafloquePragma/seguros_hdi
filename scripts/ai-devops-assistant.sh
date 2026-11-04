@@ -14,7 +14,7 @@ echo "[INFO] Ejecutando Asistente de IA en modo '${MODO}'..."
 # PASO 1: Extraer el contenido del archivo de entrada para el contexto de la IA
 DATOS_ENTRADA=""
 if [ -n "${ARCHIVO_ENTRADA}" ] && [ -f "${ARCHIVO_ENTRADA}" ]; then
-  DATOS_ENTRADA=$(head -c 5000 "${ARCHIVO_ENTRADA}" | tr '"\r\n' '   ')
+  DATOS_ENTRADA=$(head -c 15000 "${ARCHIVO_ENTRADA}" | tr '"\r\n' '   ')
 fi
 
 # PASO 2: Definir el prompt para la IA según el caso

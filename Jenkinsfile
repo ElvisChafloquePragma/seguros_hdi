@@ -113,9 +113,10 @@ pipeline {
                                 checkov -f infra/template.yaml \
                                   --framework cloudformation \
                                   --soft-fail \
-                                  -o json > reports/checkov-iac.json || true
+                                  --compact --quiet \
+                                  -o cli > reports/checkov-iac.txt || true
                             else
-                                echo '{"results":{"passed_checks":20,"failed_checks":0},"status":"skipped_tool_missing"}' > reports/checkov-iac.json
+                                echo 'CHECKOV NO EJECUTADO: skipped_tool_missing' > reports/checkov-iac.txt
                             fi
                         '''
                     }
@@ -125,7 +126,12 @@ pipeline {
                 success {
                     echo '[AI Case #2] Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock...'
                     sh '''
-                        python3 scripts/summarize-security.py reports reports/combined-security.txt
+                        : > reports/combined-security.txt
+                        for f in gitleaks-all.json semgrep-sast.json npm-audit-backend.json checkov-iac.txt; do
+                            echo "=== reports/${f} ===" >> reports/combined-security.txt
+                            cat reports/${f} >> reports/combined-security.txt
+                            echo "" >> reports/combined-security.txt
+                        done
                         bash scripts/ai-devops-assistant.sh triage reports/combined-security.txt reports/security-summary.md
                         cat reports/security-summary.md
                     '''
