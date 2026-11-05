@@ -26,7 +26,23 @@ sanitize_pii() {
 # PASO 1: Extraer el contenido del archivo de entrada y sanitizar PII
 DATOS_ENTRADA=""
 if [ -n "${ARCHIVO_ENTRADA}" ] && [ -f "${ARCHIVO_ENTRADA}" ]; then
-  BRUTO=$(head -c 15000 "${ARCHIVO_ENTRADA}" | tr '"\r\n' '   ')
+  BRUTO=$(python3 -c "
+import json, os, sys
+entrada = sys.argv[1]
+try:
+    ck_path = 'reports/checkov-iac.json' if os.path.exists('reports/checkov-iac.json') else ''
+    if ck_path:
+        ck = json.load(open(ck_path))
+        s = ck.get('summary', {})
+        failed = [f\"{c.get('check_id')}: {c.get('check_name')} ({c.get('resource')})\" for c in ck.get('results', {}).get('failed_checks', [])]
+        ck_res = f\"CHECKOV_IAC: {s.get('passed', 0)} checks pasados, {s.get('failed', 0)} checks fallados. Detalle fallos: \" + '; '.join(failed[:15])
+        base_text = open(entrada).read()
+        print(base_text[:3000] + '\n' + ck_res)
+    else:
+        print(open(entrada).read()[:15000])
+except Exception:
+    print(open(entrada).read()[:15000])
+" "${ARCHIVO_ENTRADA}" 2>/dev/null || head -c 15000 "${ARCHIVO_ENTRADA}")
   DATOS_ENTRADA=$(sanitize_pii "${BRUTO}")
 fi
 
