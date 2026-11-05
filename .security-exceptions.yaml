@@ -74,27 +74,3 @@ exceptions:
     justification: "Al utilizar el dominio por defecto *.cloudfront.net sin certificado ACM personalizado en dev/staging, AWS gestiona la negociacion TLS. En produccion con dominio propio se impone TLSv1.2_2021."
     approved_by: "Arquitectura de Seguridad"
     expires_on: "2027-06-30"
-
-  - id: CKV_AWS_173
-    tool: checkov
-    severity: LOW
-    resource: "AWS::Serverless::Function"
-    justification: "Las funciones Lambda no almacenan credenciales ni datos sensibles en variables de entorno (solo variables publicas de entorno y ARNs). Las credenciales reales se obtienen en runtime desde AWS Secrets Manager cifrado con KMS."
-    approved_by: "Oficial de Cumplimiento SFC"
-    expires_on: "2027-06-30"
-
-  - id: CKV_AWS_26
-    tool: checkov
-    severity: LOW
-    resource: "AWS::SNS::Topic"
-    justification: "El topico SNS se utiliza exclusivamente para alertas operativas de CloudWatch hacia DevOps/SRE. No almacena ni procesa datos personales (PII) de asegurados."
-    approved_by: "Arquitectura Cloud"
-    expires_on: "2027-06-30"
-
-  - id: CKV_AWS_158
-    tool: checkov
-    severity: MEDIUM
-    resource: "AWS::Logs::LogGroup"
-    justification: "La proteccion de datos personales en CloudWatch se garantiza mediante DataProtectionPolicy nativa (enmascaramiento con *****) y retencion a 365 dias. Cifrado con KMS en Log Group planificado para proximo sprint."
-    approved_by: "Oficial de Cumplimiento SFC"
-    expires_on: "2027-06-30"

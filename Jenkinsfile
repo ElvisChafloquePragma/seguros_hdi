@@ -38,7 +38,7 @@ pipeline {
                     echo "[CI/CD] Ambiente seleccionado='${params.TARGET_ENV}' | Commit=${env.GIT_COMMIT_SHORT}"
                     currentBuild.description = "Commit: ${env.GIT_COMMIT_SHORT} | Env: ${params.TARGET_ENV}"
                 }
-                sh 'mkdir -p reports'
+                sh 'rm -rf reports && mkdir -p reports'
             }
         }
 
@@ -72,48 +72,40 @@ pipeline {
             }
         }
 
+        // Quality Gates bloqueantes (fail-closed): si un escaner encuentra un hallazgo bloqueante
+        // o la herramienta no esta instalada, el stage falla y el pipeline NO despliega.
+        // Las herramientas vienen preinstaladas en la imagen del runner (ci/jenkins/Dockerfile).
         stage('4. Security Scan') {
             parallel {
                 stage('4a. Secret Scanning (Gitleaks)') {
                     steps {
-                        sh '''
-                            if command -v gitleaks >/dev/null 2>&1; then
-                                gitleaks detect --source=. --no-git --redact --report-format=json --report-path=reports/gitleaks-all.json || true
-                            else
-                                echo '{"findings":[],"status":"skipped_tool_missing"}' > reports/gitleaks-all.json
-                            fi
-                        '''
+                        // Bloquea (exit 1) si detecta cualquier secreto en el repositorio
+                        sh 'gitleaks detect --source=. --no-git --redact --report-format=json --report-path=reports/gitleaks-all.json'
                     }
                 }
                 stage('4b. SAST (Semgrep OWASP)') {
                     steps {
-                        sh '''
-                            if command -v semgrep >/dev/null 2>&1; then
-                                semgrep scan --config auto backend/claims backend/documents --json --output reports/semgrep-sast.json || true
-                            else
-                                echo '{"results":[],"status":"skipped_tool_missing"}' > reports/semgrep-sast.json
-                            fi
-                        '''
+                        // --error: bloquea si hay hallazgos. --metrics=off: no envia telemetria (SFC)
+                        sh 'semgrep scan --config p/owasp-top-ten --metrics=off --error backend/claims backend/documents --json --output reports/semgrep-sast.json'
                     }
                 }
                 stage('4c. SCA Dependency Audit (npm audit)') {
                     steps {
                         dir('backend') {
-                            sh 'npm audit --audit-level=high --json > ../reports/npm-audit-backend.json || true'
+                            // --audit-level=high: bloquea (exit != 0) solo con vulnerabilidades HIGH o CRITICAL
+                            sh 'npm audit --audit-level=high --json > ../reports/npm-audit-backend.json'
                         }
                     }
                 }
                 stage('4d. IaC Security Scan (Checkov)') {
                     steps {
+                        // --hard-fail-on: solo bloquean los checks criticos (cifrado KMS, S3 privado, PITR, IAM).
+                        // El resto se reporta completo en el JSON y Bedrock lo analiza (excepciones en .security-exceptions.yaml)
                         sh '''
-                            if command -v checkov >/dev/null 2>&1; then
-                                checkov -f infra/template.yaml \
-                                  --framework cloudformation \
-                                  --soft-fail \
-                                  -o json > reports/checkov-iac.json || true
-                            else
-                                echo '{"results":{"passed_checks":20,"failed_checks":0},"status":"skipped_tool_missing"}' > reports/checkov-iac.json
-                            fi
+                            checkov -f infra/template.yaml \
+                              --framework cloudformation \
+                              --hard-fail-on CKV_AWS_7,CKV_AWS_19,CKV_AWS_20,CKV_AWS_26,CKV_AWS_28,CKV_AWS_33,CKV_AWS_45,CKV_AWS_53,CKV_AWS_54,CKV_AWS_55,CKV_AWS_56,CKV_AWS_57,CKV_AWS_119,CKV_AWS_149,CKV_AWS_158,CKV_AWS_173 \
+                              -o json > reports/checkov-iac.json
                         '''
                     }
                 }

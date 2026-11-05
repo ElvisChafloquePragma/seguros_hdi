@@ -13,11 +13,13 @@ En las **Etapas 2 y 4** del [`Jenkinsfile`](../Jenkinsfile) integramos **5 herra
 
 | Categoría DevSecOps | Herramienta Integrada | Etapa del `Jenkinsfile` | Comando Ejecutado | Qué verifica exactamente | Evidencia en `reports/` |
 |---|---|---|---|---|---|
-| **1. Escaneo de Secretos** | **Gitleaks** | `Stage 4a` (Paralelo) | `gitleaks detect --source <dir> --no-git --redact` | Busca llaves AWS (`AKIA...`), contraseñas, tokens JWT o llaves privadas en `backend/`, `frontend/` e `infra/`. | `reports/gitleaks-*.json` |
-| **2. Análisis Estático de Código (SAST)** | **Semgrep** | `Stage 4b` (Paralelo) | `semgrep scan --config p/default backend/claims backend/documents --json` | Analiza el código JavaScript de las Lambdas contra vulnerabilidades OWASP Top 10 (inyecciones, mal manejo de errores, eval). | `reports/semgrep-sast.json` |
-| **3. Análisis de Dependencias (SCA)** | **npm audit** | `Stage 4c` (Paralelo) | `npm audit --audit-level=high --json` | Revisa el árbol de dependencias (`package-lock.json`) buscando vulnerabilidades CVE de severidad `HIGH` o `CRITICAL`. | `reports/npm-audit-backend.json` |
-| **4. Seguridad de Infraestructura (IaC Scan)** | **Checkov + `sam validate` + `check-jsonschema`** | `Stage 2` y `Stage 4d` (Paralelo) | `checkov -f infra/template.yaml --framework cloudformation` | Audita `infra/template.yaml` verificando cifrado KMS, bloqueo de acceso público S3, PITR en DynamoDB, X-Ray e IAM de mínimo privilegio. | `reports/checkov-iac.json` |
-| **5. Triage Inteligente con IA** | **Amazon Bedrock (`amazon.nova-micro-v1:0`)** | `Stage 4 -> post { success }` | `bash scripts/ai-devops-assistant.sh triage` | Consolida los reportes JSON y genera un dictamen ejecutivo en Markdown con impacto regulatorio SFC para el aprobador de producción. | `reports/security-summary.md` |
+| **1. Escaneo de Secretos** | **Gitleaks** | `Stage 4a` (Paralelo) | `gitleaks detect --source=. --no-git --redact` | Busca llaves AWS (`AKIA...`), contraseñas, tokens JWT o llaves privadas en todo el repositorio. **Bloquea** si encuentra alguno. | `reports/gitleaks-all.json` |
+| **2. Análisis Estático de Código (SAST)** | **Semgrep** | `Stage 4b` (Paralelo) | `semgrep scan --config p/owasp-top-ten --metrics=off --error backend/claims backend/documents` | Analiza el código JavaScript de las Lambdas contra el ruleset OWASP Top 10, sin enviar telemetría. **Bloquea** si hay hallazgos. | `reports/semgrep-sast.json` |
+| **3. Análisis de Dependencias (SCA)** | **npm audit** | `Stage 4c` (Paralelo) | `npm audit --audit-level=high --json` | Revisa `package-lock.json` buscando CVE. **Bloquea** solo con severidad `HIGH` o `CRITICAL`. | `reports/npm-audit-backend.json` |
+| **4. Seguridad de Infraestructura (IaC Scan)** | **Checkov + `sam validate` + `check-jsonschema`** | `Stage 2` y `Stage 4d` (Paralelo) | `checkov -f infra/template.yaml --framework cloudformation --hard-fail-on <checks criticos>` | Audita `infra/template.yaml`. **Bloquean** los checks críticos (cifrado KMS, S3 privado, PITR, IAM); el resto se reporta completo en el JSON y lo analiza Bedrock. | `reports/checkov-iac.json` |
+| **5. Triage Inteligente con IA** | **Amazon Bedrock (`BEDROCK_MODEL_ID`, por defecto `amazon.nova-micro-v1:0`)** | `Stage 4 -> post { always }` | `bash scripts/ai-devops-assistant.sh triage` | Consolida los reportes y genera un dictamen en Markdown. Es **asesor**: si Bedrock no responde, el dictamen lo dice y exige revisión manual (nunca simula una aprobación). | `reports/security-summary.md` |
+
+> **Fail-closed:** las herramientas vienen preinstaladas en la imagen del runner ([`ci/jenkins/Dockerfile`](../ci/jenkins/Dockerfile)). Si una falta, el stage falla; ya no existe el reporte simulado `skipped_tool_missing`.
 
 ---
 

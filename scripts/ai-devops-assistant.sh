@@ -6,7 +6,7 @@ set -e
 MODO="${1:-triage}"                     
 ARCHIVO_ENTRADA="${2:-}"                 
 ARCHIVO_SALIDA="${3:-security-summary.md}" 
-MODELO_IA="amazon.nova-micro-v1:0"       
+MODELO_IA="${BEDROCK_MODEL_ID:-amazon.nova-micro-v1:0}"
 REGION="${AWS_REGION:-us-east-1}"
 
 echo "[INFO] Ejecutando Asistente de IA en modo '${MODO}'..."
@@ -60,11 +60,13 @@ if aws bedrock-runtime converse \
     --model-id "${MODELO_IA}" \
     --region "${REGION}" \
     --messages "${MESSAGES_JSON}" \
-    --output json > /tmp/respuesta_ia.json 2>/dev/null; then
+    --output json > /tmp/respuesta_ia.json 2> /tmp/respuesta_ia.err; then
 
   ANALISIS=$(python3 -c "import json; print(json.load(open('/tmp/respuesta_ia.json'))['output']['message']['content'][0]['text'])" 2>/dev/null || jq -r '.output.message.content[0].text' /tmp/respuesta_ia.json 2>/dev/null)
 else
-  ANALISIS="1. Quality Gate APROBADO: Sin secretos ni vulnerabilidades críticas en dependencias. 2. Protección de datos activa con cifrado KMS y enmascaramiento SFC en CloudWatch. 3. Autorizado para despliegue Canary en Producción."
+  # Fail-safe: si la IA no responde NUNCA se simula una aprobacion. La decision queda en manos humanas.
+  echo "[WARN] Bedrock no respondio: $(head -c 300 /tmp/respuesta_ia.err)" >&2
+  ANALISIS="**ANALISIS DE IA NO DISPONIBLE.** Amazon Bedrock no respondio, por lo que este dictamen NO aprueba ni rechaza nada. Revision manual de los reportes en reports/ obligatoria antes de autorizar el paso a Produccion."
 fi
 
 # PASO 4: Guardar el dictamen en un archivo Markdown para Jenkins
