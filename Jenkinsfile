@@ -77,7 +77,6 @@ pipeline {
                 stage('4a. Secret Scanning (Gitleaks)') {
                     steps {
                         sh '''
-                            mkdir -p reports
                             if command -v gitleaks >/dev/null 2>&1; then
                                 gitleaks detect --source=. --no-git --redact --report-format=json --report-path=reports/gitleaks-all.json || true
                             else
@@ -89,7 +88,6 @@ pipeline {
                 stage('4b. SAST (Semgrep OWASP)') {
                     steps {
                         sh '''
-                            mkdir -p reports
                             if command -v semgrep >/dev/null 2>&1; then
                                 semgrep scan --config auto backend/claims backend/documents --json --output reports/semgrep-sast.json || true
                             else
@@ -101,14 +99,13 @@ pipeline {
                 stage('4c. SCA Dependency Audit (npm audit)') {
                     steps {
                         dir('backend') {
-                            sh 'mkdir -p ../reports && npm audit --audit-level=high --json > ../reports/npm-audit-backend.json || true'
+                            sh 'npm audit --audit-level=high --json > ../reports/npm-audit-backend.json || true'
                         }
                     }
                 }
                 stage('4d. IaC Security Scan (Checkov)') {
                     steps {
                         sh '''
-                            mkdir -p reports
                             if command -v checkov >/dev/null 2>&1; then
                                 checkov -f infra/template.yaml \
                                   --framework cloudformation \
