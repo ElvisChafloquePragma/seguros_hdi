@@ -72,9 +72,6 @@ pipeline {
             }
         }
 
-        // Quality Gates bloqueantes (fail-closed): si un escaner encuentra un hallazgo bloqueante
-        // o la herramienta no esta instalada, el stage falla y el pipeline NO despliega.
-        // Las herramientas vienen preinstaladas en la imagen del runner (ci/jenkins/Dockerfile).
         stage('4. Security Scan') {
             parallel {
                 stage('4a. Secret Scanning (Gitleaks)') {
@@ -85,7 +82,7 @@ pipeline {
                 }
                 stage('4b. SAST (Semgrep OWASP)') {
                     steps {
-                        // --error: bloquea si hay hallazgos. --metrics=off: no envia telemetria (SFC)
+                        // --error: bloquea si hay hallazgos. --metrics=off: 
                         sh 'semgrep scan --config p/owasp-top-ten --metrics=off --error backend/claims backend/documents --json --output reports/semgrep-sast.json'
                     }
                 }
@@ -114,7 +111,7 @@ pipeline {
                 always {
                     sh '''
                         cat reports/gitleaks-all.json reports/semgrep-sast.json reports/npm-audit-backend.json reports/checkov-iac.json > reports/combined-security.txt || true
-                        echo '[AI Case #2] Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock...'
+                        echo 'Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock'
                         bash scripts/ai-devops-assistant.sh triage reports/combined-security.txt reports/security-summary.md
                         cat reports/security-summary.md
                     '''
@@ -240,7 +237,7 @@ pipeline {
             script {
                 currentBuild.description = "${currentBuild.description} | Estado: FALLIDO (Causa Analizada por Bedrock)"
             }
-            echo '[AI Case #1] Analizando causa raiz del fallo con Amazon Bedrock y registrando CFR en DORA...'
+            echo ' Analizando causa raiz del fallo con Amazon Bedrock y registrando CFR en DORA...'
             sh '''
                 bash scripts/ai-devops-assistant.sh failure reports/combined-security.txt reports/ai-failure-analysis.md || true
                 cat reports/ai-failure-analysis.md || true

@@ -1,16 +1,3 @@
-# ==============================================================================
-# Imagen de Jenkins para el pipeline de Siniestros HDI (DevSecOps reproducible)
-#
-# Por que existe: las herramientas de seguridad y de despliegue NO deben instalarse
-# a mano dentro del contenedor ni descargarse en cada build. Con esta imagen el
-# runner es determinista: versiones fijas, auditables y reconstruibles en minutos.
-#
-# Construir:   docker build -t jenkins-hdi:1.0 ci/jenkins
-# Ejecutar:    docker run -d --name jenkins-lab -p 8080:8080 -p 50000:50000 \
-#                -v <ruta_local>/jenkins_home:/var/jenkins_home \
-#                -v /var/run/docker.sock:/var/run/docker.sock jenkins-hdi:1.0
-# (Mismo jenkins_home: jobs, credenciales y plugins se conservan.)
-# ==============================================================================
 FROM jenkins/jenkins:lts-jdk21
 
 USER root
