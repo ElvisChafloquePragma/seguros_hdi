@@ -17,14 +17,14 @@ El archivo [`Jenkinsfile`](../Jenkinsfile) implementa un **Pipeline Declarativo 
 
 | Fase Pedida en el PDF | Etapa(s) en [`Jenkinsfile`](../Jenkinsfile) | Líneas | Comandos Exactos que Ejecuta | Qué valida / Qué artefacto produce |
 |---|---|---|---|---|
-| **1. Checkout** | **`Stage 1: Checkout & Metadata`** | L43–54 | `git rev-parse --short HEAD`<br>`mkdir -p reports` | Clona el código, identifica el commit (`GIT_COMMIT_SHORT`) y el ambiente destino (`TARGET_ENV`). |
-| **2. Pre-Validate (IaC & Params)** | **`Stage 2: Validate Environment Config & IaC`** | L56–66 | `bash scripts/validate-params.sh`<br>`sam validate -t infra/template.yaml` | Valida `dev.json`, `staging.json` y `prod.json` contra [`schema.json`](../infra/params/schema.json) y valida la sintaxis de CloudFormation/SAM antes de compilar. |
-| **3. Build & Test** | **`Stage 3: Build & Unit Tests`** | L68–82 | **Backend:** `npm run lint` (`node --check`) + `npm test` (`node --test`)<br>**Frontend:** `npm run build` | Verifica sintaxis ESM de las 2 Lambdas, ejecuta las pruebas unitarias en [`backend/tests/backend.test.mjs`](../backend/tests/backend.test.mjs) y empaqueta el SPA en `frontend/dist/index.html`. |
-| **4. Security Scan** | **`Stage 4: Security Scan (DevSecOps Gate + AI Triage)`** | L84–131 | En **4 hilos paralelos**:<br>• `4a`: `gitleaks detect` (Secretos)<br>• `4b`: `semgrep scan` (SAST)<br>• `4c`: `npm audit --audit-level=high` (SCA)<br>• `4d`: `checkov -f infra/template.yaml` (IaC)<br>• **Post-Stage:** `ai-devops-assistant.sh triage` | Genera los reportes JSON en `reports/` y un dictamen ejecutivo con **Amazon Bedrock (`nova-micro-v1:0`)** en `reports/security-summary.md`. |
-| **5. Deploy (`dev` / `staging`)** | **`Stage 5: Deploy to DEV`**<br>**`Stage 6: Deploy to STAGING`** | L133–169 | `sam deploy --config-env dev|staging`<br>`bash scripts/deploy-frontend.sh <env>`<br>`bash scripts/smoke-test.sh <env>`<br>`bash scripts/dora-metrics.sh <env>` | Despliega el stack en AWS, sincroniza el frontend en S3, invalida CloudFront, prueba los endpoints con `curl` y publica métricas DORA. |
-| **6. Manual Approval** | **`Stage 7: Manual Approval for PRODUCTION`** | L171–189 | `readFile('reports/security-summary.md')`<br>`input(message: ..., submitterParameter: 'APPROVER_USER')` | Muestra el dictamen de seguridad de Bedrock, pausa la ejecución y registra el usuario que autorizó el paso a `prod` para auditoría SFC. |
-| **7. Deploy (`prod`)** | **`Stage 8: Deploy to PROD`** | L191–208 | `sam deploy --config-env prod`<br>`bash scripts/deploy-frontend.sh prod`<br>`bash scripts/smoke-test.sh prod`<br>`bash scripts/dora-metrics.sh prod` | Despliega en producción con estrategia **`Canary10Percent5Minutes`**, activa WAFv2, invalida CloudFront y verifica salud con smoke tests. |
-| **8. Post-Failure (RCA con IA)** | **`post { failure }`** | L211–220 | `bash scripts/ai-devops-assistant.sh failure`<br>`bash scripts/dora-metrics.sh <env> FAILURE` | Si cualquier etapa falla, **Amazon Bedrock** analiza la causa raíz, genera `reports/ai-failure-analysis.md` y registra el fallo en las métricas DORA. |
+| **1. Checkout** | **`Stage 1: Checkout & Metadata`** | L30–43 | `git rev-parse --short HEAD`<br>`rm -rf reports && mkdir -p reports` | Clona el código, identifica el commit (`GIT_COMMIT_SHORT`), asigna el ambiente destino (`TARGET_ENV`) y limpia el directorio de reportes para evitar artefactos residuales de builds previos. |
+| **2. Pre-Validate (IaC & Params)** | **`Stage 2: Validate Environment Config & IaC`** | L45–55 | `bash scripts/validate-params.sh`<br>`sam validate -t infra/template.yaml` | Valida `dev.json`, `staging.json` y `prod.json` contra [`schema.json`](../infra/params/schema.json) y valida la sintaxis de CloudFormation/SAM antes de compilar. |
+| **3. Build & Test** | **`Stage 3: Build & Unit Tests`** | L57–73 | **Backend:** `npm run lint` (`node --check`) + `npm test` (`node --test`)<br>**Frontend:** `npm run build` | Verifica sintaxis ESM de las 2 Lambdas, ejecuta las pruebas unitarias en [`backend/tests/backend.test.mjs`](../backend/tests/backend.test.mjs) y empaqueta el SPA en `frontend/dist/index.html`. |
+| **4. Security Scan** | **`Stage 4: Security Scan (DevSecOps Gate + AI Triage)`** | L75–125 | En **4 hilos paralelos**:<br>• `4a`: `gitleaks detect` (Secretos, `--redact`)<br>• `4b`: `semgrep scan` (SAST, OWASP Top 10)<br>• `4c`: `npm audit --audit-level=high` (SCA)<br>• `4d`: `checkov -f infra/template.yaml --hard-fail-on <16 checks>` (IaC)<br>• **Post-Stage (`always`):** `ai-devops-assistant.sh triage` + `archiveArtifacts` | Evalúa las 4 capas de seguridad. Si se incumple algún Quality Gate crítico, bloquea el despliegue. Bedrock (`amazon.nova-micro-v1:0`) sintetiza los hallazgos en `reports/security-summary.md` y archiva las evidencias. |
+| **5. Deploy (`dev` / `staging`)** | **`Stage 5: Deploy to DEV`**<br>**`Stage 6: Deploy to STAGING`** | L127–178 | Auto-remediación `ROLLBACK_COMPLETE`<br>`sam deploy --config-file infra/samconfig.toml --config-env dev|staging`<br>`bash scripts/deploy-frontend.sh <env>`<br>`bash scripts/smoke-test.sh <env>`<br>`bash scripts/dora-metrics.sh <env>` | Limpia stacks zombies si existen, despliega el stack en AWS mediante SAM, sincroniza el frontend en S3, invalida CloudFront, prueba los endpoints con `curl` y publica métricas DORA. |
+| **6. Manual Approval** | **`Stage 7: Manual Approval for PRODUCTION`** | L180–199 | `readFile('reports/security-summary.md')`<br>`input(message: ..., submitterParameter: 'APPROVER_USER')` | Muestra el dictamen de seguridad de Bedrock, pausa la ejecución y registra el usuario que autorizó el paso a `prod` para auditoría SFC (inviolable, sin bypass). |
+| **7. Deploy (`prod`)** | **`Stage 8: Deploy to PROD`** | L201–227 | Auto-remediación `ROLLBACK_COMPLETE`<br>`sam deploy --config-file infra/samconfig.toml --config-env prod`<br>`bash scripts/deploy-frontend.sh prod`<br>`bash scripts/smoke-test.sh prod`<br>`bash scripts/dora-metrics.sh prod` | Despliega en producción con estrategia **`Canary10Percent5Minutes`**, activa WAFv2, invalida CloudFront y verifica salud con smoke tests. |
+| **8. Post-Failure (RCA con IA)** | **`post { failure }`** | L237–250 | `bash scripts/ai-devops-assistant.sh failure`<br>`bash scripts/dora-metrics.sh <env> FAILURE` | Si cualquier etapa falla, **Amazon Bedrock** analiza la causa raíz, genera `reports/ai-failure-analysis.md` y registra el fallo en las métricas DORA. |
 
 ---
 
@@ -51,7 +51,7 @@ En las líneas **171–189** del [`Jenkinsfile`](../Jenkinsfile), antes de ejecu
 ```groovy
 stage('7. Manual Approval for PRODUCTION (SFC Audit Gate)') {
     when {
-        expression { return (params.TARGET_ENV == 'all (dev -> staging -> prod)' || params.TARGET_ENV == 'prod') && !params.SKIP_PROD_APPROVAL }
+        expression { return params.TARGET_ENV == 'all (dev -> staging -> prod)' || params.TARGET_ENV == 'prod' }
     }
     steps {
         script {
@@ -65,6 +65,7 @@ stage('7. Manual Approval for PRODUCTION (SFC Audit Gate)') {
                 )
             }
             echo "[SFC Audit] Despliegue a PROD aprobado por: ${env.APPROVER_USER ?: 'ReleaseManager'}"
+            currentBuild.description = "${currentBuild.description} | Aprobador: ${env.APPROVER_USER ?: 'ReleaseManager'}"
         }
     }
 }
@@ -120,8 +121,8 @@ Implementamos **3 niveles de Rollback** para cubrir funciones Lambda, infraestru
 | Nivel de Rollback | Qué lo dispara automáticamente | Cómo actúa técnicamente | Tiempo de Recuperación (MTTR) |
 |---|---|---|---|
 | **1. Rollback Automático de Tráfico Lambda (AWS CodeDeploy + CloudWatch Alarms)** | Si durante la ventana Canary (5 min) se activa cualquiera de las 3 alarmas en CloudWatch:<br>• `ClaimsFunctionErrorsAlarm` (`Errors >= 1` en 1 min)<br>• `DocumentsFunctionErrorsAlarm` (`Errors >= 1` en 1 min)<br>• `ApiGateway5xxAlarm` (`5XXError >= 2` en 1 min) | **AWS CodeDeploy aborta inmediatamente el despliegue** y devuelve el **100% del peso del alias `:live`** a la versión inmutable anterior (`v1`), publicando además una alerta en el tópico SNS `AlertsTopic`. | **< 1 minuto (100% automático, sin intervención humana)** |
-| **2. Rollback Automático de Infraestructura (AWS CloudFormation)** | Si cualquier recurso de `infra/template.yaml` falla al crearse o actualizarse durante `sam deploy`. | CloudFormation detiene la actualización y ejecuta `UPDATE_ROLLBACK_IN_PROGRESS` regresando todos los recursos al estado exacto del template previo. | **1 a 2 minutos (100% automático)** |
-| **3. Rollback de Emergencia por Pipeline (`FORCE_ROLLBACK`)** | Si un error funcional de negocio se detecta horas después del despliegue (o en el frontend SPA). | En el [`Jenkinsfile`](../Jenkinsfile) (Líneas 22–31) definimos los parámetros `FORCE_ROLLBACK=true` y `ROLLBACK_COMMIT_SHA` para redesplegar cualquier versión estable anterior en un clic. | **2 a 3 minutos (Un clic en Jenkins)** |
+| **2. Rollback Automático de Infraestructura (AWS CloudFormation + Auto-Remediación)** | Si cualquier recurso de `infra/template.yaml` falla al crearse o actualizarse durante `sam deploy`. | CloudFormation detiene la actualización y ejecuta `UPDATE_ROLLBACK_IN_PROGRESS` regresando al estado previo estable. Además, si el stack queda en el estado zombie `ROLLBACK_COMPLETE`, el pipeline lo detecta automáticamente, lo elimina con `delete-stack` y espera `stack-delete-complete` para recreación limpia. | **1 a 2 minutos (100% automático)** |
+| **3. Rollback Controlado por Git / Trazabilidad de Auditoría** | Si un error funcional de negocio se detecta horas después del despliegue en producción. | Siguiendo las directivas de auditoría de la SFC, el rollback se gestiona mediante Git (*GitOps*): se re-ejecuta el build sobre el commit o tag anterior estable (`git revert` o checkout de versión previa), manteniendo la pista de auditoría inalterable sin recurrir a parámetros que alteren la lógica del pipeline. | **2 a 3 minutos (Desencadenado en Jenkins)** |
 
 ---
 

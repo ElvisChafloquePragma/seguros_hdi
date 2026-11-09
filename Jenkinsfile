@@ -38,7 +38,7 @@ pipeline {
                     echo "[CI/CD] Ambiente seleccionado='${params.TARGET_ENV}' | Commit=${env.GIT_COMMIT_SHORT}"
                     currentBuild.description = "Commit: ${env.GIT_COMMIT_SHORT} | Env: ${params.TARGET_ENV}"
                 }
-                sh 'mkdir -p reports'
+                sh 'rm -rf reports && mkdir -p reports'
             }
         }
 
@@ -76,55 +76,42 @@ pipeline {
             parallel {
                 stage('4a. Secret Scanning (Gitleaks)') {
                     steps {
-                        sh '''
-                            if command -v gitleaks >/dev/null 2>&1; then
-                                gitleaks detect --source backend --no-git --redact --report-format json --report-path reports/gitleaks-backend.json || true
-                                gitleaks detect --source frontend --no-git --redact --report-format json --report-path reports/gitleaks-frontend.json || true
-                                gitleaks detect --source infra --no-git --redact --report-format json --report-path reports/gitleaks-infra.json || true
-                            else
-                                echo '{"findings":[],"status":"skipped_tool_missing"}' > reports/gitleaks-backend.json
-                            fi
-                        '''
+                        // Bloquea (exit 1) si detecta cualquier secreto en el repositorio
+                        sh 'gitleaks detect --source=. --no-git --redact --report-format=json --report-path=reports/gitleaks-all.json'
                     }
                 }
                 stage('4b. SAST (Semgrep OWASP)') {
                     steps {
-                        sh '''
-                            if command -v semgrep >/dev/null 2>&1; then
-                                semgrep scan --config p/default backend/claims backend/documents --json --output reports/semgrep-sast.json || true
-                            else
-                                echo '{"results":[],"status":"skipped_tool_missing"}' > reports/semgrep-sast.json
-                            fi
-                        '''
+                        // --error: bloquea si hay hallazgos. --metrics=off: 
+                        sh 'semgrep scan --config p/owasp-top-ten --metrics=off --error backend/claims backend/documents --json --output reports/semgrep-sast.json'
                     }
                 }
                 stage('4c. SCA Dependency Audit (npm audit)') {
                     steps {
                         dir('backend') {
-                            sh 'npm audit --audit-level=high --json > ../reports/npm-audit-backend.json || true'
+                            // --audit-level=high: bloquea (exit != 0) solo con vulnerabilidades HIGH o CRITICAL
+                            sh 'npm audit --audit-level=high --json > ../reports/npm-audit-backend.json'
                         }
                     }
                 }
                 stage('4d. IaC Security Scan (Checkov)') {
                     steps {
+                        // --hard-fail-on: solo bloquean los checks criticos (cifrado KMS, S3 privado, PITR, IAM).
+                        // El resto se reporta completo en el JSON y Bedrock lo analiza (excepciones en .security-exceptions.yaml)
                         sh '''
-                            if command -v checkov >/dev/null 2>&1; then
-                                checkov -f infra/template.yaml \
-                                  --framework cloudformation \
-                                  --soft-fail \
-                                  -o json > reports/checkov-iac.json || true
-                            else
-                                echo '{"results":{"passed_checks":20,"failed_checks":0},"status":"skipped_tool_missing"}' > reports/checkov-iac.json
-                            fi
+                            checkov -f infra/template.yaml \
+                              --framework cloudformation \
+                              --hard-fail-on CKV_AWS_7,CKV_AWS_19,CKV_AWS_20,CKV_AWS_26,CKV_AWS_28,CKV_AWS_33,CKV_AWS_45,CKV_AWS_53,CKV_AWS_54,CKV_AWS_55,CKV_AWS_56,CKV_AWS_57,CKV_AWS_119,CKV_AWS_149,CKV_AWS_158,CKV_AWS_173 \
+                              -o json > reports/checkov-iac.json
                         '''
                     }
                 }
             }
             post {
-                success {
-                    echo '[AI Case #2] Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock...'
+                always {
                     sh '''
-                        cat reports/npm-audit-backend.json reports/gitleaks-backend.json > reports/combined-security.txt || true
+                        cat reports/gitleaks-all.json reports/semgrep-sast.json reports/npm-audit-backend.json reports/checkov-iac.json > reports/combined-security.txt || true
+                        echo 'Ejecutando Triage Inteligente de Seguridad con Amazon Bedrock'
                         bash scripts/ai-devops-assistant.sh triage reports/combined-security.txt reports/security-summary.md
                         cat reports/security-summary.md
                     '''
@@ -250,7 +237,7 @@ pipeline {
             script {
                 currentBuild.description = "${currentBuild.description} | Estado: FALLIDO (Causa Analizada por Bedrock)"
             }
-            echo '[AI Case #1] Analizando causa raiz del fallo con Amazon Bedrock y registrando CFR en DORA...'
+            echo ' Analizando causa raiz del fallo con Amazon Bedrock y registrando CFR en DORA...'
             sh '''
                 bash scripts/ai-devops-assistant.sh failure reports/combined-security.txt reports/ai-failure-analysis.md || true
                 cat reports/ai-failure-analysis.md || true

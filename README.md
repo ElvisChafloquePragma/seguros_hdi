@@ -26,6 +26,8 @@ Prueba_tecnica/
 ├── README.md                        # Guía general, arquitectura y comandos rápidos
 ├── Jenkinsfile                      # Pipeline CI/CD declarativo con las 8 etapas
 ├── .security-exceptions.yaml        # Política de Quality Gates (Bloqueo vs Advertencia) y excepciones
+├── ci/
+│   └── jenkins/Dockerfile           # Imagen Docker del runner inmutable con herramientas preinstaladas
 ├── infra/
 │   ├── template.yaml                # Único template SAM autónomo (100% de la arquitectura)
 │   ├── samconfig.toml               # Configuración de despliegue por ambiente (dev, staging, prod)
@@ -58,13 +60,13 @@ Prueba_tecnica/
 
 | # | Problema Inicial | Solución Implementada |
 |---|---|---|
-| 1 | **Despliegue manual** desde máquinas locales | Pipeline declarativo en [`Jenkinsfile`](Jenkinsfile) y despliegue automatizado con `sam deploy --config-env <env>`. |
+| 1 | **Despliegue manual** desde máquinas locales | Pipeline declarativo en [`Jenkinsfile`](Jenkinsfile) y despliegue automatizado con `sam deploy --config-env <env>` con auto-remediación de fallos previos. |
 | 2 | **Sin pipeline CI/CD** ni validaciones previas | Flujo completo: `Checkout → Validate Config & IaC → Build & Unit Tests → Security Scan en paralelo + AI Triage → Deploy + Smoke E2E`. |
-| 3 | **Sin análisis de seguridad** (SAST, SCA, IaC) | **Gitleaks** (secretos), **Semgrep** (SAST), **npm audit** (SCA), **sam validate** y **Checkov** (IaC) con política en [`.security-exceptions.yaml`](.security-exceptions.yaml). |
+| 3 | **Sin análisis de seguridad** (SAST, SCA, IaC) | **Gitleaks** (secretos), **Semgrep** (SAST), **npm audit** (SCA), **sam validate** y **Checkov** (IaC con `--hard-fail-on`) con política en [`.security-exceptions.yaml`](.security-exceptions.yaml). |
 | 4 | **Sin observabilidad** ni trazabilidad | Logs JSON estructurados con enmascaramiento de PII, trazabilidad **AWS X-Ray**, **CloudWatch Dashboard** y **3 alarmas críticas** conectadas a **SNS**. |
 | 5 | **Configuración inconsistente** entre ambientes | Un único template [`infra/template.yaml`](infra/template.yaml) + archivos [`infra/params/*.json`](infra/params/) validados contra [`schema.json`](infra/params/schema.json) antes de desplegar. |
 | 6 | **Sin estrategia de rollback** (>1 hora manual) | **AWS CodeDeploy Canary** (`Canary10Percent5Minutes` en `prod`) + rollback automático disparado por alarmas de CloudWatch en **< 1 minuto**. |
-| 7 | **Datos sensibles (PII) y regulación SFC** | Función [`maskPii()`](backend/claims/index.mjs) que oculta cédula/nombre/teléfono en logs, cifrado **KMS CMK** con rotación anual en DynamoDB, S3 y Secrets Manager, y URLs prefirmadas de 5 min. |
+| 7 | **Datos sensibles (PII) y regulación SFC** | Función [`maskPii()`](backend/claims/index.mjs), política `DataProtectionPolicy` en CloudWatch, cifrado **KMS CMK** con rotación anual en DynamoDB, S3, Secrets Manager, Lambdas, CloudWatch Logs y SNS. |
 
 ---
 
@@ -76,6 +78,7 @@ Prueba_tecnica/
 4. **[Observabilidad, Alertas Críticas y Métricas DORA (`docs/04-observabilidad-y-dora.md`)](docs/04-observabilidad-y-dora.md)**
 5. **[Integración de Inteligencia Artificial en DevOps (`docs/05-ai-en-devops-bedrock.md`)](docs/05-ai-en-devops-bedrock.md)**
 6. **[Análisis de Costos y Operación (`docs/06-costos-y-teardown.md`)](docs/06-costos-y-teardown.md)**
+7. **[Guía de Solución a los 7 Problemas del Caso (`docs/07-guia-problemas-y-soluciones.md`)](docs/07-guia-problemas-y-soluciones.md)**
 
 ---
 
