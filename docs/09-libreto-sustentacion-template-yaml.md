@@ -41,9 +41,7 @@ Finalmente, el bloque **`Environment.Variables`** inyecta a nivel de sistema ope
 
 "El Bloque 1 atiende las exigencias de ciberseguridad y la **Circular Externa 007 de 2018 de la SFC**:
 
-Aprovisionamos la llave administrada por el cliente **`AppKmsKey` (AWS KMS CMK)** con **rotación anual automática (`EnableKeyRotation: true`)** y una ventana de eliminación de 7 días. Su **`KeyPolicy`** está diseñado con dos declaraciones vitales:
-1. **`EnableRootAdminPermissions`**: Delega la administración a la cuenta de AWS para que las políticas de IAM de los roles puedan utilizarla, evitando crear una llave inaccesible.
-2. **`AllowCloudWatchAlarmsAndSNS`**: Otorga permisos explícitos de `kms:Decrypt` y `kms:GenerateDataKey*` a los servicios de **CloudWatch y SNS**, garantizando que las alertas de incidentes puedan cifrarse y viajar sin fallar silenciosamente.
+Aprovisionamos la llave administrada por el cliente **`AppKmsKey` (AWS KMS CMK)** con **rotación anual automática (`EnableKeyRotation: true`)** y una ventana de eliminación de 7 días. Su **`KeyPolicy`** implementa la declaración **`EnableRootAdminPermissions`**, delegando la administración a la cuenta de AWS para que las políticas de IAM de los roles de las Lambdas puedan utilizarla de forma granular, evitando crear una llave inaccesible. Esta llave se encarga de cifrar en reposo los tres lugares donde residen datos confidenciales (PII): la tabla **DynamoDB**, el bucket **S3 de Reportes** y las credenciales en **Secrets Manager**.
 
 Junto a la llave, creamos **`IntegrationSecret` en AWS Secrets Manager** cifrado bajo nuestra CMK. Para evitar secretos expuestos en Git o digitados manualmente, usamos la propiedad **`GenerateSecretString`**: AWS genera de forma criptográfica y automática un API Key de 24 caracteres sin caracteres especiales (`ExcludePunctuation: true`) durante el despliegue. Esto asegura que la integración con proveedores de asistencia vehicular nazca segura, pasando completamente limpios los escaneos de **Gitleaks**."
 
@@ -85,17 +83,21 @@ Además, en **`ClaimsFunctionLogGroup`** implementamos un control avanzado de pr
 
 ---
 
-### 8. Bloque 5: Perímetro Seguro, CloudFront CDN y Frontend SPA (Líneas 319-444)
+### 8. Bloque 5: Perímetro Seguro, CloudFront CDN y Frontend SPA (Líneas 327-450)
 
-"En el perímetro de la aplicación, el portal web en React SPA se almacena en el bucket privado **`FrontendBucket`**, protegido con cifrado AES256 y bloqueo total de acceso público:
+"En el perímetro de la solución, **`CloudFrontDistribution`** no es solo un acelerador de contenido; actúa como el **Reverse Proxy y Punto Único de Entrada de toda la arquitectura**, resolviendo cuatro grandes desafíos de nivel empresarial:
 
-La única vía de acceso al bucket es **Amazon CloudFront**, gracias al aprovisionamiento de **`CloudFrontOriginAccessControl` (OAC con protocolo SigV4)** y la política **`FrontendBucketPolicy`**, que restringe las lecturas de S3 exclusivamente a peticiones firmadas provenientes del ARN de nuestra distribución CDN.
+1. **Arquitectura Multi-Origen y Eliminación Definitiva de CORS**:
+   Configuramos dos orígenes bajo el mismo dominio HTTPS: la raíz `/` sirve los archivos estáticos desde el bucket S3 privado, mientras que la ruta `/api/*` enruta transparentemente las transacciones al API Gateway. Al convivir frontend y backend en un mismo dominio, **eliminamos de raíz la fricción, fallos y latencias de preflight requests de CORS**. Para la API aplicamos la política administrada `CachingDisabled`, asegurando transacciones en tiempo real sin caché stale.
 
-En producción, la distribución se encuentra blindada por **`FrontendWebACL` (AWS WAFv2)**, el cual aplica el conjunto de reglas gestionadas de AWS contra el **OWASP Top 10** (`AWSManagedRulesCommonRuleSet`), bloqueando ataques comunes de inyección SQL, XSS y escaneos maliciosos.
+2. **Seguridad Perimetral con OAC, WAF y Calificación A+ en Cabeceras**:
+   El bucket S3 está 100% cerrado a internet (`BlockPublicAccess`). La única vía de lectura es a través de **`CloudFrontOriginAccessControl` (OAC con firma SigV4)**, que supera al deprecado OAI. En producción, la distribución se encuentra protegida por **AWS WAFv2 (`FrontendWebACL`)** con las reglas del OWASP Top 10 (`AWSManagedRulesCommonRuleSet`). Además, inyectamos la política administrada `Managed-SecurityHeadersPolicy`, forzando cabeceras como **HSTS**, **X-Frame-Options: DENY** y **X-Content-Type-Options: nosniff**.
 
-Nuestra distribución **`CloudFrontDistribution`** incorpora dos grandes ventajas arquitectónicas:
-1. **Calificación A+ en Seguridad Web**: En el comportamiento por defecto inyectamos la política gestionada **`ResponseHeadersPolicyId` (Managed-SecurityHeadersPolicy)**, forzando cabeceras HTTP de estricta seguridad como **HSTS**, **X-Frame-Options: DENY**, **X-Content-Type-Options: nosniff** y protección XSS.
-2. **Arquitectura de Dominio Unificado (Eliminación de CORS)**: Configuramos dos orígenes bajo la misma distribución. La raíz `/` atiende los estáticos del SPA con soporte de rutas virtuales mediante **`CustomErrorResponses`** (redireccionando errores 403 y 404 hacia `/index.html`), mientras que la ruta **/api/\*** desvía el tráfico directamente al API Gateway con caché desactivada. Al convivir el frontend y el backend bajo el mismo dominio HTTPS, **eliminamos de raíz la fricción y fallos de CORS**. Además, usamos la clase **`PriceClass_100`** para cubrir Norteamérica y Colombia optimizando costos."
+3. **Soporte Nativo de Client-Side Routing para SPAs**:
+   Implementamos **`CustomErrorResponses`** mapeando los códigos 403 y 404 hacia `/index.html` con status HTTP 200. Esto garantiza que cuando un usuario recarga el navegador en una ruta profunda de la aplicación React (HTML5 History API), el CDN entrega el index y la aplicación enruta la vista sin arrojar un error de página no encontrada.
+
+4. **FinOps y Rendimiento Regional (`PriceClass_100`)**:
+   Restringimos los Edge Locations a Norteamérica y Europa con `PriceClass_100`, que atiende a Colombia con latencias mínimas y **reduce hasta un 40% la factura de CDN**, complementado con cifrado SSE-AES256 en S3 para evitar costos de peticiones a KMS."
 
 ---
 

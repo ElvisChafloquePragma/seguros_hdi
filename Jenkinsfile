@@ -14,21 +14,6 @@ pipeline {
             choices: ['all (dev -> staging -> prod)', 'dev', 'staging', 'prod'],
             description: 'Ambiente objetivo de despliegue'
         )
-        booleanParam(
-            name: 'SKIP_PROD_APPROVAL',
-            defaultValue: false,
-            description: 'Solo para pruebas automatizadas de laboratorio (en operacion real requiere aprobacion manual)'
-        )
-        booleanParam(
-            name: 'FORCE_ROLLBACK',
-            defaultValue: false,
-            description: 'Activar para revertir inmediatamente un ambiente al ultimo artefacto inmutable estable'
-        )
-        string(
-            name: 'ROLLBACK_COMMIT_SHA',
-            defaultValue: '',
-            description: 'SHA del artefacto inmutable a restaurar en caso de FORCE_ROLLBACK=true'
-        )
     }
 
     environment {
@@ -50,22 +35,8 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    // Deteccion automatica de ambiente segun la rama de Git
-                    def currentBranch = env.BRANCH_NAME ?: sh(script: 'git rev-parse --abbrev-ref HEAD 2>/dev/null || echo ""', returnStdout: true).trim()
-                    if (currentBranch == 'develop') {
-                        env.EFFECTIVE_ENV = 'dev'
-                    } else if (currentBranch == 'staging' || currentBranch.startsWith('release/')) {
-                        env.EFFECTIVE_ENV = 'staging'
-                    } else if (currentBranch == 'main' || currentBranch == 'master') {
-                        env.EFFECTIVE_ENV = (params.TARGET_ENV == 'dev' || params.TARGET_ENV == 'staging') ? params.TARGET_ENV : 'prod'
-                    } else {
-                        env.EFFECTIVE_ENV = params.TARGET_ENV
-                    }
-
-                    echo "[CI/CD] Rama detectada='${currentBranch}' -> Ambiente efectivo='${env.EFFECTIVE_ENV}' | Commit=${env.GIT_COMMIT_SHORT}"
-
-                    // Plus CI/CD: Descripcion ejecutiva dinamica en la interfaz web de Jenkins
-                    currentBuild.description = "Commit: ${env.GIT_COMMIT_SHORT} | Rama: ${currentBranch} | Env: ${env.EFFECTIVE_ENV}"
+                    echo "[CI/CD] Ambiente seleccionado='${params.TARGET_ENV}' | Commit=${env.GIT_COMMIT_SHORT}"
+                    currentBuild.description = "Commit: ${env.GIT_COMMIT_SHORT} | Env: ${params.TARGET_ENV}"
                 }
                 sh 'mkdir -p reports'
             }
@@ -101,7 +72,7 @@ pipeline {
             }
         }
 
-        stage('4. Security Scan (DevSecOps Gate + AI Triage)') {
+        stage('4. Security Scan') {
             parallel {
                 stage('4a. Secret Scanning (Gitleaks)') {
                     steps {
@@ -164,7 +135,7 @@ pipeline {
 
         stage('5. Deploy to DEV & Smoke Tests') {
             when {
-                expression { return env.EFFECTIVE_ENV == 'all (dev -> staging -> prod)' || env.EFFECTIVE_ENV == 'dev' }
+                expression { return params.TARGET_ENV == 'all (dev -> staging -> prod)' || params.TARGET_ENV == 'dev' }
             }
             steps {
                 sh '''
@@ -176,10 +147,12 @@ pipeline {
                         aws cloudformation wait stack-delete-complete --stack-name "siniestros-dev" --region "${AWS_REGION}"
                     fi
 
+                    PARAMS=$(jq -r 'to_entries | map("\(.key)=\(.value)") | join(" ")' infra/params/dev.json)
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
                       --config-env dev \
+                      --parameter-overrides ${PARAMS} \
                       --region "${AWS_REGION}"
 
                     bash scripts/deploy-frontend.sh dev
@@ -191,7 +164,7 @@ pipeline {
 
         stage('6. Deploy to STAGING & Integration Tests') {
             when {
-                expression { return env.EFFECTIVE_ENV == 'all (dev -> staging -> prod)' || env.EFFECTIVE_ENV == 'staging' }
+                expression { return params.TARGET_ENV == 'all (dev -> staging -> prod)' || params.TARGET_ENV == 'staging' }
             }
             steps {
                 sh '''
@@ -202,10 +175,12 @@ pipeline {
                         aws cloudformation wait stack-delete-complete --stack-name "siniestros-staging" --region "${AWS_REGION}"
                     fi
 
+                    PARAMS=$(jq -r 'to_entries | map("\(.key)=\(.value)") | join(" ")' infra/params/staging.json)
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
                       --config-env staging \
+                      --parameter-overrides ${PARAMS} \
                       --region "${AWS_REGION}"
 
                     bash scripts/deploy-frontend.sh staging
@@ -217,7 +192,7 @@ pipeline {
 
         stage('7. Manual Approval for PRODUCTION (SFC Audit Gate)') {
             when {
-                expression { return (env.EFFECTIVE_ENV == 'all (dev -> staging -> prod)' || env.EFFECTIVE_ENV == 'prod') && !params.SKIP_PROD_APPROVAL }
+                expression { return params.TARGET_ENV == 'all (dev -> staging -> prod)' || params.TARGET_ENV == 'prod' }
             }
             steps {
                 script {
@@ -238,7 +213,7 @@ pipeline {
 
         stage('8. Deploy to PROD (Canary + Auto-Rollback + CloudFront Invalidation)') {
             when {
-                expression { return env.EFFECTIVE_ENV == 'all (dev -> staging -> prod)' || env.EFFECTIVE_ENV == 'prod' }
+                expression { return params.TARGET_ENV == 'all (dev -> staging -> prod)' || params.TARGET_ENV == 'prod' }
             }
             steps {
                 sh '''
@@ -249,10 +224,12 @@ pipeline {
                         aws cloudformation wait stack-delete-complete --stack-name "siniestros-prod" --region "${AWS_REGION}"
                     fi
 
+                    PARAMS=$(jq -r 'to_entries | map("\(.key)=\(.value)") | join(" ")' infra/params/prod.json)
                     sam deploy \
                       --template-file infra/template.yaml \
                       --config-file "${PWD}/infra/samconfig.toml" \
                       --config-env prod \
+                      --parameter-overrides ${PARAMS} \
                       --region "${AWS_REGION}"
 
                     bash scripts/deploy-frontend.sh prod

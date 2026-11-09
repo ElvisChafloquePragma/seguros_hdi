@@ -1,20 +1,58 @@
-# Libreto de Exposición Continua: Pipeline CI/CD (`Jenkinsfile`)
+# Libreto de Exposición: Pipeline CI/CD (`Jenkinsfile`)
 
-Pasando ahora a la automatización del ciclo de vida y entrega continua, todo el flujo está orquestado mediante nuestro **`Jenkinsfile` declarativo**. El pipeline comienza fijando opciones operacionales críticas como **`timestamps`** para registrar el segundo exacto de cada acción por exigencia de auditoría de la **SFC**, **`disableConcurrentBuilds`** para prevenir bloqueos en CloudFormation, y **`buildDiscarder`** para retener únicamente los últimos 30 builds. Además, definimos parámetros de contingencia como **`FORCE_ROLLBACK`** y **`ROLLBACK_COMMIT_SHA`**, que permiten revertir cualquier ambiente a un commit estable anterior en menos de dos minutos.
+> **Tiempo estimado:** ~3 minutos. Léelo mientras recorres el `Jenkinsfile` de arriba hacia abajo.
 
-En la primera etapa de **Checkout y Metadata**, el pipeline captura el hash corto del commit y aplica una **lógica de ruteo automático por ramas (GitFlow)**: si el cambio ingresa por la rama **`develop`**, se asigna automáticamente al ambiente **`dev`**; si ingresa por **`staging`**, se dirige a **`staging`**; y si ingresa por la rama principal **`main`**, se enruta hacia **`prod`**, permitiendo también ejecuciones manuales parametrizadas. Como **plus de visibilidad ejecutiva**, inyectamos en **`currentBuild.description`** los metadatos dinámicos del build (commit, rama y ambiente), de modo que cualquier stakeholder o auditor visualiza el estado del negocio directamente en la lista de ejecuciones de Jenkins sin necesidad de inspeccionar logs técnicos.
+---
 
-En la segunda etapa de **Validación Previa**, atacamos el problema de configuraciones manuales inconsistentes mediante dos compuertas antes de construir código: primero, el script **`validate-params.sh`** valida con **JSON Schema** que los archivos de parámetros cumplan con tipos y rangos permitidos, forzando que producción mantenga **`LogRetentionDays` en 365 días** y el firewall **`EnableWaf` en true**; segundo, ejecutamos **`sam validate`** para comprobar la sintaxis de CloudFormation. Si alguien introdujo un parámetro inválido, el pipeline **falla en apenas 3 segundos** sin tocar AWS.
+## 🎙️ Libreto Continuo
 
-En la tercera etapa de **Build y Pruebas Unitarias**, ejecutamos en paralelo la verificación de sintaxis y las pruebas del backend con el runner nativo de **Node 22**, comprobando en menos de **10 milisegundos** que la lógica de siniestros y la función de enmascaramiento de PII (**`maskPii`**) respondan correctamente, mientras en el frontend empaquetamos el portal web SPA.
+"Toda la entrega continua está orquestada en un **`Jenkinsfile` declarativo de 8 etapas**, alineado con los controles de la Superintendencia Financiera (SFC).
 
-En la cuarta etapa implementamos nuestra **Compuerta DevSecOps en Paralelo**, ejecutando simultáneamente cuatro herramientas para reducir el tiempo de escaneo en un 70%: **Gitleaks** para prevenir fugas de secretos y credenciales de AWS; **Semgrep** para análisis de código estático SAST contra el OWASP Top 10; **npm audit** para análisis de dependencias SCA; y **Checkov** para validar las políticas de seguridad de la infraestructura como código. Como **plus de gobernanza corporativa**, en lugar de silenciar alertas o apagar escáneres, implementamos **Policy-as-Code** mediante el archivo **`.security-exceptions.yaml`**, donde cada excepción está respaldada técnicamente con aprobador de cumplimiento y fecha de expiración. Inmediatamente después, activamos nuestro **primer caso de uso de Inteligencia Artificial con Amazon Bedrock (`amazon.nova-micro-v1:0`)**: el script consolida y sanitiza los reportes sin datos PII y genera el resumen ejecutivo **`security-summary.md`** contextualizado bajo la **Circular Externa 007 de 2018 de la SFC**, archivando todas las evidencias de forma inmutable.
+### Cabecera (options, parameters, environment)
+Fijamos **`timestamps`** para trazabilidad de auditoría, **`disableConcurrentBuilds`** para evitar que dos ejecuciones colisionen sobre el mismo stack de CloudFormation, y **`buildDiscarder`** para conservar solo los últimos 30 builds. El parámetro **`TARGET_ENV`** permite elegir el ambiente a desplegar: `dev`, `staging`, `prod` o toda la cadena. En `environment` definimos la región `us-east-1`, la ruta de las credenciales de AWS dentro del contenedor, el modelo de Bedrock y el `PATH` con las herramientas (SAM, Checkov, Semgrep).
 
-En las etapas cinco y seis ejecutamos los despliegues no productivos hacia **`dev` y `staging`**: el pipeline corre **`sam deploy`** con sus perfiles de configuración, sincroniza el frontend al bucket S3 privado mediante **`deploy-frontend.sh`**, invalida la caché de CloudFront, comprueba los endpoints en vivo con **`smoke-test.sh`**, y publica las métricas en CloudWatch con **`dora-metrics.sh`**, el cual, como **plus de observabilidad DORA real**, calcula el Lead Time restando el timestamp del commit en Git frente a la hora del despliegue exitoso, aplicando en `staging` la estrategia de despliegue progresivo **`Linear10PercentEvery1Minute`**.
+### Etapa 1: Checkout & Metadata
+Captura el hash corto del commit y registra el ambiente seleccionado en la descripción del build, dejando trazabilidad visible en Jenkins. Crea la carpeta `reports/` donde se guardarán las evidencias.
 
-La séptima etapa es la **Compuerta de Gobierno y Auditoría Exigida por la SFC**: antes de tocar producción, el pipeline se detiene mostrando en consola el dictamen de seguridad generado por Amazon Bedrock. Un líder técnico o de seguridad debe autorizar la promoción mediante el paso de aprobación manual, el cual captura de forma inmutable el usuario aprobador en la variable **`APPROVER_USER`**. Si transcurren 24 horas sin autorización, la ejecución se cancela automáticamente.
+### Etapa 2: Validación Shift-Left
+Ejecuta `validate-params.sh`, que valida `dev.json`, `staging.json` y `prod.json` contra `schema.json` con **`check-jsonschema`**, y `sam validate` sobre el template. Si hay un parámetro inválido, el pipeline falla en segundos **sin tocar AWS**.
 
-Una vez aprobado, la octava etapa ejecuta el **Despliegue a Producción** activando **AWS CodeDeploy con `Canary10Percent5Minutes`**: durante cinco minutos se envía únicamente el 10% del tráfico a la nueva versión mientras CloudWatch vigila las alarmas de error de las Lambdas y del API Gateway. Si se detecta un solo fallo, **CodeDeploy revierte automáticamente el alias `live` a la versión previa en menos de 1 minuto sin intervención humana**. Posteriormente, se actualiza el portal web y se corre el smoke test final.
+### Etapa 3: Build y Pruebas Unitarias
+Instala dependencias, corre el linter y las pruebas unitarias del backend sobre **Node.js 22** (lógica de siniestros, documentos y enmascaramiento de PII), y empaqueta el frontend.
 
-Para cerrar el ciclo, el bloque **`post { failure }`** implementa nuestro **segundo caso de uso de Inteligencia Artificial**: si cualquier etapa del pipeline llega a fallar, el script sanitiza las últimas líneas del log y consulta a **Amazon Bedrock**, el cual actúa como un SRE Senior diagnosticando la **causa raíz exacta** y entregando el **comando o cambio específico de remediación** en el archivo **`ai-failure-analysis.md`**, registrando al mismo tiempo el fallo en las métricas **DORA** de CloudWatch. Con esto garantizamos un pipeline completamente automatizado, seguro y auditable.
+### Etapa 4: Compuerta DevSecOps en Paralelo + Triaje con IA
+Ejecuta **cuatro escáneres simultáneos**: **Gitleaks** (secretos, con `--redact`), **Semgrep** (SAST, OWASP), **npm audit** (dependencias) y **Checkov** (seguridad de la IaC). Al terminar, `ai-devops-assistant.sh` envía los hallazgos a **Amazon Bedrock (Nova Micro)**, que genera el dictamen ejecutivo `security-summary.md`, archivado como evidencia.
 
+### Etapas 5 y 6: Despliegue a DEV y STAGING
+Antes de desplegar, el pipeline hace **auto-remediación**: si el stack quedó en `ROLLBACK_COMPLETE` por un intento previo, lo elimina. Luego lee los parámetros del ambiente desde `infra/params/<env>.json` con `jq` —los mismos ya validados en la Etapa 2— y los inyecta en **`sam deploy`**, mientras `samconfig.toml` aporta solo las directivas del CLI. Después sube el frontend a S3 con invalidación en CloudFront, ejecuta **smoke tests reales** contra el API y publica las **métricas DORA** en CloudWatch.
+
+### Etapa 7: Aprobación Manual para Producción
+Por **Segregación de Funciones y Principio de Cuatro Ojos**, el pipeline se detiene, muestra el dictamen de Bedrock y exige que un aprobador autorizado confirme. Su identidad queda registrada en `APPROVER_USER`. No existe ningún parámetro para saltarse este control, y si pasan 24 horas sin respuesta, el pipeline se cancela.
+
+### Etapa 8: Despliegue a PRODUCCIÓN
+Despliega con parámetros de `prod.json` (WAF activo, 365 días de retención) usando **CodeDeploy con `Canary10Percent5Minutes`**: 10% del tráfico durante 5 minutos vigilado por alarmas de CloudWatch. Si una alarma se dispara, CodeDeploy hace **rollback automático** a la versión previa. Luego actualiza el frontend, corre el smoke test final y registra métricas DORA.
+
+### Bloque post
+Si cualquier etapa falla, se activa el segundo uso de IA: Bedrock analiza el error y propone la causa raíz y el comando de remediación en `ai-failure-analysis.md`, y el fallo se registra en las métricas DORA (Change Failure Rate)."
+
+---
+
+## ⚡ Versión Flash (30 segundos)
+
+> "El `Jenkinsfile` tiene 8 etapas: metadata del build; validación Shift-Left de parámetros y template; pruebas unitarias; escaneo DevSecOps en paralelo con triaje de IA en Bedrock; despliegue a dev y staging con smoke tests y métricas DORA; aprobación manual obligatoria bajo norma SFC; y despliegue a producción con Canary y rollback automático. Si algo falla, la IA diagnostica la causa raíz."
+
+---
+
+## 🛡️ Preguntas Probables del Jurado
+
+**1. ¿Cómo se elige el ambiente?**  
+Con el parámetro `TARGET_ENV` al ejecutar el build. Cada stage de despliegue tiene un `when` que solo corre si coincide con la selección.
+
+**2. ¿Puede alguien saltarse la aprobación de producción?**  
+No. La Etapa 7 es obligatoria siempre que el despliegue incluya `prod`.
+
+**3. ¿Cómo hacen rollback?**  
+Automático en producción con CodeDeploy Canary y alarmas de CloudWatch. Para un rollback manual se vuelve a ejecutar el pipeline sobre un commit anterior.
+
+**4. ¿Por qué los parámetros salen de los `.json` y no del `samconfig.toml`?**  
+Para tener una única fuente de verdad: lo que se valida en la Etapa 2 es exactamente lo que se despliega.
