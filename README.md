@@ -15,7 +15,7 @@ Solución integral **End-to-End** para la aplicación serverless de **registro d
 | **3. API y Autenticación** | **Amazon API Gateway (`SiniestrosApi`) + Amazon Cognito (`AgentsUserPool`)** | Autentica a los agentes de seguros, habilita trazabilidad **AWS X-Ray** y enruta las peticiones REST. | Invoca el alias `:live` de las 2 funciones Lambda |
 | **4. Cómputo y Canary** | **AWS Lambda (`ClaimsFunction` y `DocumentsFunction`) + AWS CodeDeploy** | Runtime `nodejs22.x` (`arm64`) con `LogFormat: JSON`, alias `:live` y despliegue gradual **`Canary10Percent5Minutes`** con Auto-Rollback `< 1 min`. | Lee/escribe en DynamoDB, S3 Reports y Secrets Manager |
 | **5. Datos y Cifrado SFC** | **DynamoDB (`ClaimsTable`) + S3 (`ReportsBucket`) + Secrets Manager + KMS (`AppKmsKey`)** | Cifrado en reposo con llave **KMS CMK** (rotación anual automática), **PITR (35 días)** en DynamoDB y URLs prefirmadas (5 min) en S3. | Protegido bajo normativa SFC (CE 007/2018 y Ley 1581) |
-| **6. Observabilidad e IA** | **CloudWatch (`DataProtectionPolicy` + 3 Alarmas + Dashboard DORA) + SNS (`AlertsTopic` / `ChatOpsSummaryTopic`) + Lambda `IncidentAiFunction` + Amazon Bedrock** | Enmascara PII en logs (`*****`), dispara alertas a **SNS** + Auto-Rollback en CodeDeploy, ejecuta ChatOps RCA en tiempo real con **Bedrock** y grafica métricas DORA. | Cierra el ciclo de monitoreo, autodiagnóstico y mejora continua |
+| **6. Observabilidad e IA** | **CloudWatch (`DataProtectionPolicy` + 3 Alarmas + Dashboard DORA) + SNS + Amazon Bedrock** | Enmascara PII en logs (`*****`), dispara alertas a **SNS** + Auto-Rollback en CodeDeploy, grafica métricas DORA y ejecuta Triage/RCA con **Bedrock**. | Cierra el ciclo de monitoreo y mejora continua |
 
 ---
 
@@ -40,8 +40,7 @@ Prueba_tecnica/
 │   ├── package.json                 # Scripts de lint y pruebas unitarias nativas (node --test)
 │   ├── claims/index.mjs             # Lambda claims: POST, GET, PATCH + maskPii() + Secrets Manager
 │   ├── documents/index.mjs          # Lambda documents: genera PDF en S3 cifrado con KMS + URL 5 min
-│   ├── incident-ai/index.mjs        # Lambda ChatOps (Caso IA #3): Alarma SNS -> Logs -> Bedrock -> SNS RCA
-│   └── tests/backend.test.mjs       # Pruebas unitarias rápidas de validación, PII y ChatOps IA
+│   └── tests/backend.test.mjs       # Pruebas unitarias rápidas de validación y enmascarado PII
 ├── frontend/
 │   ├── index.html                   # Portal SPA ligero conectado a /api/v1/claims y /documents/report
 │   └── package.json                 # Empaquetado en frontend/dist/ para sincronizar con S3
