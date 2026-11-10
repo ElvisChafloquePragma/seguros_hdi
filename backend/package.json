@@ -1,11 +1,11 @@
 {
   "name": "siniestros-backend",
   "version": "1.0.0",
-  "description": "Lambdas Serverless (claims y documents) en Node.js 22 ESM nativo",
+  "description": "Lambdas Serverless (claims, documents e incident-ai) en Node.js 22 ESM nativo",
   "type": "module",
   "private": true,
   "scripts": {
-    "lint": "node --check claims/index.mjs && node --check documents/index.mjs",
+    "lint": "node --check claims/index.mjs && node --check documents/index.mjs && node --check incident-ai/index.mjs",
     "test": "node --test tests/backend.test.mjs"
   },
   "devDependencies": {
