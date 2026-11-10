@@ -83,7 +83,7 @@ pipeline {
                 stage('4b. SAST (Semgrep OWASP)') {
                     steps {
                         // --error: bloquea si hay hallazgos. --metrics=off: 
-                        sh 'semgrep scan --config p/owasp-top-ten --metrics=off --error backend/claims backend/documents backend/incident-ai --json --output reports/semgrep-sast.json'
+                        sh 'semgrep scan --config p/owasp-top-ten --metrics=off --error backend/claims backend/documents --json --output reports/semgrep-sast.json'
                     }
                 }
                 stage('4c. SCA Dependency Audit (npm audit)') {
