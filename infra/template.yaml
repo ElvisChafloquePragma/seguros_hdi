@@ -476,71 +476,6 @@ Resources:
       TopicName: !Sub '${ProjectName}-${Env}-critical-alerts'
       KmsMasterKeyId: !Ref AppKmsKey
 
-  # CASO DE USO IA #3 (ChatOps en Tiempo Real):
-  # Alarma CloudWatch -> AlertsTopic -> IncidentAiFunction (Logs + Bedrock) -> ChatOpsSummaryTopic
-  ChatOpsSummaryTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub '${ProjectName}-${Env}-chatops-summary'
-      DisplayName: !Sub 'HDI Siniestros (${Env}) - RCA IA Bedrock'
-      KmsMasterKeyId: !Ref AppKmsKey
-
-  IncidentAiFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${ProjectName}-${Env}-incident-ai'
-      RetentionInDays: !Ref LogRetentionDays
-      KmsKeyId: !GetAtt AppKmsKey.Arn
-
-  IncidentAiFunction:
-    Type: AWS::Serverless::Function
-    DependsOn: IncidentAiFunctionLogGroup
-    Properties:
-      FunctionName: !Sub '${ProjectName}-${Env}-incident-ai'
-      Description: ChatOps RCA con Amazon Bedrock ante alarmas criticas (Caso de Uso IA #3)
-      CodeUri: ../backend/incident-ai
-      Handler: index.handler
-      Environment:
-        Variables:
-          PROJECT_NAME: !Ref ProjectName
-          CHATOPS_TOPIC_ARN: !Ref ChatOpsSummaryTopic
-          BEDROCK_MODEL_ID: amazon.nova-micro-v1:0
-          CLAIMS_LOG_GROUP: !Sub '/aws/lambda/${ProjectName}-${Env}-claims'
-          DOCUMENTS_LOG_GROUP: !Sub '/aws/lambda/${ProjectName}-${Env}-documents'
-          API_LOG_GROUP: !Sub '/aws/apigateway/${ProjectName}-${Env}-api-access'
-      Policies:
-        - SNSPublishMessagePolicy:
-            TopicName: !GetAtt ChatOpsSummaryTopic.TopicName
-        - KMSDecryptPolicy:
-            KeyId: !Ref AppKmsKey
-        - Statement:
-            - Sid: AllowKmsForEncryptedSnsAndLogs
-              Effect: Allow
-              Action:
-                - kms:GenerateDataKey*
-                - kms:Encrypt
-              Resource: !GetAtt AppKmsKey.Arn
-            - Sid: AllowReadApplicationLogsForRca
-              Effect: Allow
-              Action:
-                - logs:FilterLogEvents
-                - logs:GetLogEvents
-                - logs:DescribeLogStreams
-              Resource:
-                - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-${Env}-*'
-                - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${ProjectName}-${Env}-*'
-            - Sid: AllowBedrockNovaMicroRca
-              Effect: Allow
-              Action:
-                - bedrock:InvokeModel
-              Resource:
-                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-micro-v1:0'
-      Events:
-        CloudWatchAlarmEvent:
-          Type: SNS
-          Properties:
-            Topic: !Ref AlertsTopic
-
   ClaimsFunctionErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -682,6 +617,6 @@ Outputs:
   ClaimsTableName:
     Description: Nombre de la tabla DynamoDB de siniestros
     Value: !Ref ClaimsTable
-  ChatOpsSummaryTopicArn:
-    Description: Topico SNS donde la Lambda IncidentAI publica el diagnostico RCA de Amazon Bedrock (Caso IA #3)
-    Value: !Ref ChatOpsSummaryTopic
+  AlertsTopicArn:
+    Description: Topico SNS cifrado con KMS para notificaciones a Correo o Slack/Teams (AWS Chatbot)
+    Value: !Ref AlertsTopic

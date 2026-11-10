@@ -18,31 +18,33 @@ En una entidad vigilada por la **Superintendencia Financiera de Colombia (SFC)**
 
 ---
 
-## 2. Los 3 Casos de Uso de AI Implementados en Nuestro Proyecto (CI/CD + AWS Runtime)
+## 2. Los 2 Casos de Uso de AI Implementados en Nuestro Proyecto
 
-El PDF pide al menos 2 casos de uso; nosotros **implementamos 3 casos de uso reales en código** (2 en el pipeline [`scripts/ai-devops-assistant.sh`](../scripts/ai-devops-assistant.sh) y 1 en vivo en AWS mediante [`backend/incident-ai/index.mjs`](../backend/incident-ai/index.mjs) + [`infra/template.yaml`](../infra/template.yaml)):
+Ambos casos de uso están programados en [`scripts/ai-devops-assistant.sh`](../scripts/ai-devops-assistant.sh) e integrados directamente en el [`Jenkinsfile`](../Jenkinsfile):
 
-| Aspecto | Caso de Uso #1 (Implementado en CI/CD):<br>**Triage Inteligente de Seguridad DevSecOps para Aprobación de PROD** | Caso de Uso #2 (Implementado en CI/CD):<br>**Diagnóstico Automático de Causa Raíz (RCA) ante Fallos del Pipeline** | Caso de Uso #3 (Implementado en AWS Runtime):<br>**ChatOps de Incidentes en Vivo (`Alarm → SNS → Lambda + Bedrock → SNS ChatOps`)** |
-|---|---|---|---|
-| **Dónde actúa** | **`Stage 4: Security Scan` → `post { always }`** ([L116–125](../Jenkinsfile#L116-L125)) y **`Stage 7: Manual Approval`** ([L186–187](../Jenkinsfile#L186-L187)). | **Bloque global `post { failure }`** del [`Jenkinsfile`](../Jenkinsfile#L237-L250). | **En vivo en AWS (`infra/template.yaml`):** `Claims/Documents/ApiGw Alarm` → `AlertsTopic` → Lambda `IncidentAiFunction` → `ChatOpsSummaryTopic`. |
-| **Archivo / Comando** | `bash scripts/ai-devops-assistant.sh triage reports/combined-security.txt reports/security-summary.md` | `bash scripts/ai-devops-assistant.sh failure reports/combined-security.txt reports/ai-failure-analysis.md` | [`backend/incident-ai/index.mjs`](../backend/incident-ai/index.mjs) suscrita a `AlertsTopic` y publicando en `ChatOpsSummaryTopic`. |
-| **Qué problema DevOps resuelve** | Los 4 escáneres (**Gitleaks, Semgrep, npm audit y Checkov**) generan archivos JSON extensos que un aprobador humano tarda mucho en correlacionar antes de autorizar `prod`. | Cuando falla un despliegue en CloudFormation o un smoke test, buscar la causa raíz entre cientos de líneas de log eleva el **MTTR**. | Cuando salta una alarma en producción, el ingeniero de guardia pierde minutos valiosos entrando a CloudWatch Logs para entender qué causó el error y el rollback. |
-| **Qué hace exactamente con Amazon Bedrock** | Extrae de forma estructurada los fallos de Checkov con Python, sanitiza PII y pide a `nova-micro-v1:0` un dictamen ejecutivo evaluando el Quality Gate y riesgos SFC. | Toma las últimas líneas sanitizadas del fallo y pide a `nova-micro-v1:0` la causa raíz exacta y el comando de remediación. | Filtra transiciones `ALARM` (ignorando `OK` por FinOps), consulta los últimos 10 min de logs con `FilterLogEvents`, **sanitiza PII (`sanitizeLogText`)**, invoca a **Bedrock (`nova-micro-v1:0`)** y publica el RCA en un **segundo tópico SNS (`ChatOpsSummaryTopic`)** evitando bucles infinitos. |
-| **Artefacto / Salida** | `reports/security-summary.md` (impreso en consola antes del botón `Aprobar y Desplegar a PROD`). | `reports/ai-failure-analysis.md` (archivado en Jenkins junto con el registro `FAILURE` en DORA). | Notificación ejecutiva en `siniestros-<env>-chatops-summary` (lista para **Email SRE** o **AWS Chatbot en Slack / Microsoft Teams** con costo `$0.00` en Free Tier). |
+| Aspecto | Caso de Uso #1 (Implementado):<br>**Triage Inteligente de Seguridad DevSecOps para Aprobación de Producción** | Caso de Uso #2 (Implementado):<br>**Diagnóstico Automático de Causa Raíz (RCA) ante Fallos del Pipeline o Rollbacks** |
+|---|---|---|
+| **Dónde actúa en el [`Jenkinsfile`](../Jenkinsfile)** | **`Stage 4: Security Scan` → bloque `post { always }`** ([L116–125](../Jenkinsfile#L116-L125)) y se muestra en **`Stage 7: Manual Approval`** ([L186–187](../Jenkinsfile#L186-L187)). | **Bloque global `post { failure }`** del pipeline ([L237–250](../Jenkinsfile#L237-L250)). |
+| **Comando ejecutado** | `bash scripts/ai-devops-assistant.sh triage reports/combined-security.txt reports/security-summary.md` | `bash scripts/ai-devops-assistant.sh failure reports/combined-security.txt reports/ai-failure-analysis.md` |
+| **Qué problema DevOps resuelve** | Los 4 escáneres (**Gitleaks, Semgrep, npm audit y Checkov**) generan archivos JSON extensos que un aprobador humano tarda mucho en correlacionar antes de autorizar el paso a producción (`Stage 7`). | Cuando falla un despliegue en CloudFormation, un smoke test o se dispara un rollback en CodeDeploy, buscar la causa raíz entre cientos de líneas de log eleva el **MTTR**. |
+| **Qué hace exactamente con Amazon Bedrock** | Extrae de forma estructurada los fallos de Checkov con un parser dinámico en Python (sin truncar), sanitiza PII y pide a `nova-micro-v1:0` un dictamen ejecutivo evaluando: (1) Estado del Quality Gate (`APROBADO` / `BLOQUEADO`), (2) Riesgos sobre datos PII bajo normativa SFC, y (3) Recomendación para el aprobador de `prod`. | Toma las últimas líneas sanitizadas del fallo y pide a `nova-micro-v1:0`: (1) Causa raíz exacta del error en CloudFormation/SAM/Pipeline, (2) Comando o cambio exacto en YAML para corregirlo, y (3) Impacto en **MTTR**. |
+| **Artefacto generado** | `reports/security-summary.md` (impreso en la consola de Jenkins justo antes del botón `Aprobar y Desplegar a PROD`). | `reports/ai-failure-analysis.md` (archivado en Jenkins junto con el registro `FAILURE` en las métricas DORA). |
 
 ---
 
-## 3. Caso Adicional Propuesto (Roadmap DevOps)
+## 3. Casos de Uso Adicionales Propuestos (Evolución DevOps)
+
+Además de los 2 casos implementados en código, proponemos 2 casos adicionales para el roadmap de la aseguradora:
 
 | Caso Adicional Propuesto | Flujo Técnico en AWS | Beneficio en Métricas DORA |
 |---|---|---|
+| **Caso #3: ChatOps de Incidentes en Vivo (`CloudWatch Alarm → SNS → AWS Chatbot / Bedrock`)** | Cuando salta `ClaimsFunctionErrorsAlarm` o `ApiGateway5xxAlarm` en producción, el tópico `AlertsTopic` notifica directamente a Correo o Slack/Teams vía **AWS Chatbot** (con Amazon Q / Bedrock resumiendo los últimos 5 minutos de logs y trazas de X-Ray). | Reduce el **MTTR** de diagnóstico en producción a menos de **15 segundos** con costo `$0.00` en Free Tier. |
 | **Caso #4: Revisión Preventiva de IaC y Costos FinOps en Pull Requests** | Antes de hacer merge a `main`, un hook analiza el `git diff` de `infra/template.yaml` con **Bedrock** para advertir si un cambio introduce recursos con cobro fijo alto (ej. NAT Gateways) o permisos IAM excesivos (`Action: "*"`). | Reduce el **Change Failure Rate (CFR)** y protege el presupuesto Cloud. |
 
 ---
 
 ## 4. Guion Corto para Sustentar el Entregable 6 en la Entrevista (30 segundos)
-> *"Para el Entregable 6 superamos los 2 casos solicitados e implementamos **3 casos de uso reales en código** conectados a **Amazon Bedrock (`amazon.nova-micro-v1:0`)** dentro de la misma cuenta de AWS y con sanitización previa de PII para cumplir con la SFC:
-> 1) **Triage Inteligente DevSecOps (`modo triage` en Jenkins):** consolida los reportes de Gitleaks, Semgrep, npm audit y Checkov y genera `reports/security-summary.md` para el aprobador de producción.
-> 2) **Diagnóstico Automático de Fallos del Pipeline (`modo failure` en Jenkins):** si falla cualquier etapa, analiza el log sanitizado con Bedrock y entrega la causa raíz y comando de remediación en `reports/ai-failure-analysis.md`.
-> 3) **ChatOps de Incidentes en Vivo (`IncidentAiFunction` en AWS):** cuando una alarma de CloudWatch salta a `ALARM` y dispara `AlertsTopic`, nuestra tercera Lambda lee los últimos logs de error en CloudWatch, enmascara PII, consulta a Bedrock y publica el diagnóstico de causa raíz en un segundo tópico SNS (`ChatOpsSummaryTopic`, evitando bucles infinitos) hacia Correo o Slack/Teams con costo `$0.00` en Free Tier."*
+> *"Para el Entregable 6 implementamos 2 casos de uso reales en `scripts/ai-devops-assistant.sh` conectados a **Amazon Bedrock (`amazon.nova-micro-v1:0`)** dentro de la misma cuenta de AWS y con sanitización previa de PII (`sanitize_pii`) para cumplir con la SFC:
+> 1) **Triage Inteligente DevSecOps (`modo triage`):** al terminar la Etapa 4 del `Jenkinsfile`, consolida los reportes de Gitleaks, Semgrep, npm audit y Checkov y genera `reports/security-summary.md`, el cual se presenta al aprobador en la Etapa 7 antes de autorizar el paso a producción.
+> 2) **Diagnóstico Automático de Causa Raíz (`modo failure`):** en el bloque `post { failure }` del `Jenkinsfile`, si falla cualquier etapa o despliegue, analiza el log sanitizado con Bedrock y entrega la causa raíz y el comando exacto de remediación en `reports/ai-failure-analysis.md`, reduciendo drásticamente el MTTR."*
 
